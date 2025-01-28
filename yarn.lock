@@ -2,6 +2,18 @@
 # yarn lockfile v1
 
 
+"@action-validator/cli@^0.6.0":
+  version "0.6.0"
+  resolved "https://registry.yarnpkg.com/@action-validator/cli/-/cli-0.6.0.tgz#02a29e322d3794903896183281eed2b55c685851"
+  integrity sha512-Z8TYOK4GqUIpI0UuspUJPB6dhr0niTumhwI5iiZVqFRXm4u05bZawnFKltpvoFUfJg9mHbbIBlleqsRJAgl53Q==
+  dependencies:
+    chalk "5.2.0"
+
+"@action-validator/core@^0.6.0":
+  version "0.6.0"
+  resolved "https://registry.yarnpkg.com/@action-validator/core/-/core-0.6.0.tgz#8fbaf45562a5377140815b79cc1ac9f610ff63e5"
+  integrity sha512-tPglwCr8Mm8SWzwnVewwFmqRx91F0WvMsM0BRAqH4CLalyGndm53Xvp+UcUSzswpk1wkjIDYI7RyEhWMLyPkig==
+
 "@adobe/css-tools@~4.3.1":
   version "4.3.3"
   resolved "https://registry.yarnpkg.com/@adobe/css-tools/-/css-tools-4.3.3.tgz#90749bde8b89cd41764224f5aac29cd4138f75ff"
@@ -1153,6 +1165,11 @@ caniuse-lite@^1.0.30001688:
   version "1.0.30001695"
   resolved "https://registry.yarnpkg.com/caniuse-lite/-/caniuse-lite-1.0.30001695.tgz#39dfedd8f94851132795fdf9b79d29659ad9c4d4"
   integrity sha512-vHyLade6wTgI2u1ec3WQBxv+2BrTERV28UXQu9LO6lZ9pYeMk34vjXFLOxo1A4UBA8XTL4njRQZdno/yYaSmWw==
+
+chalk@5.2.0:
+  version "5.2.0"
+  resolved "https://registry.yarnpkg.com/chalk/-/chalk-5.2.0.tgz#249623b7d66869c673699fb66d65723e54dfcfb3"
+  integrity sha512-ree3Gqw/nazQAPuJJEy+avdl7QfZMcUvmHIKgEZkGL+xOBzRvup5Hxo6LHuMceSxOabuJLJm5Yp/92R9eMmMvA==
 
 chalk@^5.4.1:
   version "5.4.1"

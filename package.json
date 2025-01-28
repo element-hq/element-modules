@@ -5,11 +5,14 @@
         "modules/*/element-web"
     ],
     "scripts": {
+        "lint:workflows": "find .github/workflows -type f \\( -iname '*.yaml' -o -iname '*.yml' \\) | xargs -I {} sh -c 'echo \"Linting {}\"; action-validator \"{}\"'",
         "lint:prettier": "prettier --check .",
         "lint:prettier:fix": "prettier --write .",
         "prepare": "husky"
     },
     "devDependencies": {
+        "@action-validator/cli": "^0.6.0",
+        "@action-validator/core": "^0.6.0",
         "eslint-plugin-matrix-org": "^2.0.2",
         "husky": "^9.1.7",
         "lint-staged": "^15.4.2",
