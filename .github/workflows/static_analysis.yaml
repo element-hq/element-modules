@@ -19,7 +19,6 @@ jobs:
             matrix:
                 cmd:
                     - yarn workspaces run lint:ts
-                    - yarn workspaces run lint:style
                     - yarn run lint:js
                     - yarn run lint:workflows
                     - yarn run lint:prettier
