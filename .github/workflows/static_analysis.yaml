@@ -18,11 +18,11 @@ jobs:
             fail-fast: false
             matrix:
                 cmd:
-                    - yarn workspaces run lint:ts
-                    - yarn run lint:js
-                    - yarn run lint:workflows
-                    - yarn run lint:prettier
-                    - yarn run lint:knip
+                    - lint:ts
+                    - lint:js
+                    - lint:workflows
+                    - lint:prettier
+                    - lint:knip
         steps:
             - uses: actions/checkout@v4
 
@@ -35,4 +35,4 @@ jobs:
               run: "yarn install --frozen-lockfile"
 
             - name: Run check
-              run: "${{ matrix.cmd }}"
+              run: "yarn run ${{ matrix.cmd }}"
