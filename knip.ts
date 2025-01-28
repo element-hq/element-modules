@@ -8,5 +8,13 @@ Please see LICENSE files in the repository root for full details.
 import { KnipConfig } from "knip";
 
 export default {
-    ignoreDependencies: ["@matrix-org/react-sdk-module-api"],
+    ignoreDependencies: [
+        // Needed for lint:workflows
+        "@action-validator/cli",
+        "@action-validator/core",
+        // Needed for backwards-compatible types
+        "@matrix-org/react-sdk-module-api",
+        // Unlisted peer dependency for @matrix-org/react-sdk-module-api
+        "matrix-web-i18n",
+    ],
 } satisfies KnipConfig;
