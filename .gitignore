@@ -133,3 +133,4 @@ dist
 # Custom rules
 # Ignore all built libraries
 lib/
+temp/
