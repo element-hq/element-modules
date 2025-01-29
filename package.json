@@ -11,7 +11,7 @@
         "lint:js": "eslint --max-warnings 0 modules/*/element-web/src packages/*/src",
         "lint:ts": "yarn workspaces run lint:ts",
         "lint:knip": "knip",
-        "prepare": "husky"
+        "prepare": "husky && yarn workspaces run prepare"
     },
     "devDependencies": {
         "@action-validator/cli": "^0.6.0",
