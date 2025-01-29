@@ -1,5 +1,5 @@
-# .github
+# Element Modules
 
-Default metadata files for repos in this org.
+A repository collecting a bunch of Element Web & Synapse modules to extend & modify system behaviour.
 
-If you're seeing this readme in your project, your project is configured wrong.
+See README files in each module for more information.
