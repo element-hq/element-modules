@@ -33,4 +33,5 @@ jobs:
                   name: coverage
                   path: |
                       **/coverage
+                      !**/coverage/lcov-report
                       !**/node_modules/**
