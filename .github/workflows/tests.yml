@@ -33,3 +33,4 @@ jobs:
                   name: coverage
                   path: |
                       **/coverage
+                      !**/node_modules/**
