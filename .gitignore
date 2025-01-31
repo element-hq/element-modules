@@ -134,3 +134,4 @@ dist
 # Ignore all built libraries
 lib/
 temp/
+coverage/
