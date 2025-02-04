@@ -5,7 +5,7 @@ name: Release Synapse Guest Module
 on:
   push:
     tags:
-      - '@nordeck/synapse-guest-module@*'
+      - '@element-hq/synapse-guest-module@*'
 
 jobs:
   build:
@@ -17,7 +17,7 @@ jobs:
       packages: write
       id-token: write
     env:
-      DOCKER_IMAGE: ghcr.io/nordeck/synapse-guest-module
+      DOCKER_IMAGE: ghcr.io/element-hq/synapse-guest-module
     steps:
       - name: Generate Docker metadata of the existing image
         id: meta-existing-tag
@@ -35,9 +35,9 @@ jobs:
           labels: |
             org.opencontainers.image.title=Synapse Guest Module
             org.opencontainers.image.description=A synapse module to restrict the actions of guests
-            org.opencontainers.image.vendor=Nordeck IT + Consulting GmbH
+            org.opencontainers.image.vendor=New Vector Ltd.
           tags: |
-            type=match,pattern=@nordeck/synapse-guest-module@(.*),group=1
+            type=match,pattern=@element-hq/synapse-guest-module@(.*),group=1
 
       - name: Generate Dockerfile
         env:
