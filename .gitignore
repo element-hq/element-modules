@@ -130,6 +130,14 @@ dist
 .yarn/install-state.gz
 .pnp.*
 
+# Python
+.venv
+__pycache__/
+.tox/
+*.egg-info/
+_trial_temp/
+.mypy_cache/
+
 # Custom rules
 # Ignore all built libraries
 lib/
