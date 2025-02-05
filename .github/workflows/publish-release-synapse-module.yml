@@ -5,7 +5,7 @@ name: Release Synapse Guest Module
 on:
     push:
         tags:
-            - "@element-hq/synapse-guest-module@*"
+            - "module/restricted-guests@*"
 
 jobs:
     build:
