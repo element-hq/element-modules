@@ -25,7 +25,7 @@ jobs:
               run: "yarn install --frozen-lockfile"
 
             - name: Run tests
-              run: yarn vitest --coverage
+              run: yarn workspaces run vitest --coverage
 
             - name: Upload Artifact
               uses: actions/upload-artifact@v4
