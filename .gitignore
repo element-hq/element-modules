@@ -134,6 +134,8 @@ dist
 .venv
 __pycache__/
 .tox/
+.coverage*
+coverage.*
 *.egg-info/
 _trial_temp/
 .mypy_cache/
