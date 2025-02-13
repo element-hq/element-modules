@@ -52,6 +52,7 @@ jobs:
                   reports=$(find . -type f -name 'sonar-report.xml' -printf '%h/%f,' | tr -d '\r\n' | sed 's/,$//g')
                   echo "sonar.testExecutionReportPaths=$reports" >> sonar-project.properties
                   synapseCoverage=$(find . -type f -name 'coverage.xml' -printf '%h/%f,' | tr -d '\r\n' | sed 's/,$//g')
+                  echo "sonar.python.coverage.reportPaths=$synapseCoverage" >> sonar-project.properties
 
             - name: "🩻 SonarCloud Scan"
               id: sonarcloud
