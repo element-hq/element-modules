@@ -31,9 +31,6 @@ jobs:
             - name: type checking and declarations
               run: tox -e check_types
 
-            - name: test
-              run: tox -e py
-
             - name: Login to ghcr.io
               uses: docker/login-action@v3
               with:

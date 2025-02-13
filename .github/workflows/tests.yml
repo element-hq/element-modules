@@ -10,8 +10,8 @@ concurrency:
 permissions: {}
 
 jobs:
-    vitest:
-        name: Vitest
+    test:
+        name: Run tests & upload coverage reports
         runs-on: ubuntu-24.04-arm
         steps:
             - uses: actions/checkout@v4
@@ -20,6 +20,10 @@ jobs:
               with:
                   cache: "yarn"
                   node-version: "lts/*"
+
+            - uses: actions/setup-python@v5
+              with:
+                  python-version: "3.11"
 
             - name: Install Deps
               run: "yarn install --frozen-lockfile"
