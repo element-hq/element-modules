@@ -10,7 +10,7 @@
         "lint:prettier": "prettier --check .",
         "lint:prettier:fix": "prettier --write .",
         "lint:js": "eslint --max-warnings 0 modules/*/element-web/src packages/*/src",
-        "lint:ts": "yarn workspaces run lint:ts",
+        "lint": "yarn workspaces run lint",
         "lint:knip": "knip",
         "test": "yarn workspaces run test",
         "prepare": "husky && yarn workspaces run prepare"
