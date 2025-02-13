@@ -32,7 +32,7 @@ jobs:
               run: yarn test
 
             - name: Fixup python coverage
-              run: sed -ie 's/filename="/filename="modules\/restricted-guests\/synapse/' modules/restricted-guests/synapse/coverage.xml
+              run: sed -ie 's/filename="/filename="modules\/restricted-guests\/synapse\//' modules/restricted-guests/synapse/coverage.xml
 
             - name: Upload Artifact
               uses: actions/upload-artifact@v4
