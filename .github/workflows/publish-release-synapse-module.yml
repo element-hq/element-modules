@@ -37,7 +37,7 @@ jobs:
                       org.opencontainers.image.description=A synapse module to restrict the actions of guests
                       org.opencontainers.image.vendor=New Vector Ltd.
                   tags: |
-                      type=match,pattern=@element-hq/synapse-guest-module@(.*),group=1
+                      type=match,pattern=module/restricted-guests@(.*),group=1
 
             - name: Generate Dockerfile
               env:
