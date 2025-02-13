@@ -32,6 +32,7 @@ jobs:
               with:
                   name: coverage
                   path: |
+                      modules/restricted-guests/synapse/coverage.xml
                       **/coverage
                       !**/coverage/lcov-report
                       !**/node_modules/**
