@@ -1,16 +1,15 @@
-name: Test and build Synapse Guest Module
+name: Build Synapse Guest Module
 
 on:
-    workflow_run:
-        workflows: ["Tests"]
-        types:
-            - completed
+    push:
+        branches:
+            - main
+    pull_request:
 
 jobs:
     build-py:
         name: Build Python
         runs-on: ubuntu-latest
-        if: ${{ github.event.workflow_run.conclusion == 'success' }}
         timeout-minutes: 15
         defaults:
             run:
