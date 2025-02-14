@@ -1,2 +1,3 @@
 *                         @element-hq/element-web-reviewers
 synapse/                  @element-hq/server-products-developers
+.github/workflows/        @element-hq/server-products-developers
