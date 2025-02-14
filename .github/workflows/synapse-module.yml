@@ -1,4 +1,4 @@
-name: Build Synapse Guest Module
+name: Test and build Synapse Guest Module
 
 on:
     workflow_run:
