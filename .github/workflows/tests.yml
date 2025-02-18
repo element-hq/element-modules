@@ -10,8 +10,8 @@ concurrency:
 permissions: {}
 
 jobs:
-    vitest:
-        name: Vitest
+    test:
+        name: Run tests & upload coverage reports
         runs-on: ubuntu-24.04-arm
         steps:
             - uses: actions/checkout@v4
@@ -21,17 +21,25 @@ jobs:
                   cache: "yarn"
                   node-version: "lts/*"
 
+            - uses: actions/setup-python@v5
+              with:
+                  python-version: "3.11"
+
             - name: Install Deps
               run: "yarn install --frozen-lockfile"
 
             - name: Run tests
-              run: yarn test --coverage
+              run: yarn test
+
+            - name: Fixup python coverage
+              run: sed -ie 's/filename="/filename="modules\/restricted-guests\/synapse\//' modules/restricted-guests/synapse/coverage.xml
 
             - name: Upload Artifact
               uses: actions/upload-artifact@v4
               with:
                   name: coverage
                   path: |
+                      modules/restricted-guests/synapse/coverage.xml
                       **/coverage
                       !**/coverage/lcov-report
                       !**/node_modules/**
