@@ -21,7 +21,7 @@ jobs:
             DOCKER_IMAGE: ghcr.io/element-hq/synapse-guest-module
         steps:
             - name: Generate Docker metadata of the existing image
-              id: meta-existing-tag
+              id: meta
               uses: docker/metadata-action@v5
               with:
                   bake-target: docker-metadata-action
