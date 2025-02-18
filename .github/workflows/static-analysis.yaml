@@ -19,6 +19,7 @@ jobs:
                 cmd:
                     - lint:ts
                     - lint:js
+                    - lint:py
                     - lint:workflows
                     - lint:prettier
                     - lint:knip
@@ -29,6 +30,10 @@ jobs:
               with:
                   cache: "yarn"
                   node-version: "lts/*"
+
+            - uses: actions/setup-python@v5
+              with:
+                  python-version: "3.11"
 
             - name: Install Deps
               run: "yarn install --frozen-lockfile"

@@ -10,7 +10,9 @@
         "lint:prettier": "prettier --check .",
         "lint:prettier:fix": "prettier --write .",
         "lint:js": "eslint --max-warnings 0 modules/*/element-web/src packages/*/src",
-        "lint:ts": "yarn workspaces run lint:ts",
+        "lint:ts": "for W in @element-hq/element-web-module-api nordeck-plugin; do yarn workspace $W run lint; done",
+        "lint:py": "yarn workspace @element-hq/synapse-guest-module run lint",
+        "lint": "yarn workspaces run lint",
         "lint:knip": "knip",
         "test": "yarn workspaces run test",
         "prepare": "husky && yarn workspaces run prepare"
