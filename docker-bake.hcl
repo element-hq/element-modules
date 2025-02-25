@@ -5,39 +5,49 @@ variable "ELEMENT_VERSION" {
   default = "latest"
 }
 
+variable "DATE" {
+  validation {
+    condition = DATE != ""
+    error_message = "DATE must be set"
+  }
+
+  validation {
+    condition = DATE == regex("\\d{6}", DATE)
+    error_message = "The variable 'DATE' must be of format YYMMNN where NN is the build number of the month."
+  }
+}
+
+variable "BUILD_TAG" {
+  default = "${ELEMENT_VERSION}-${DATE}"
+}
+
 group "default" {
-  targets = ["element-web-modules", "element-web-modules-opendesk-plugin"]
+  targets = [
+    "element-web-modules-opendesk-plugin"
+  ]
 }
 
 target "_common" {
   inherits = ["docker-metadata-action"]
   platforms = [
     "linux/amd64",
-    # "linux/arm64",
+    "linux/arm64",
   ]
   context = "."
-  args = {
-    ELEMENT_VERSION = "${ELEMENT_VERSION}"
-  }
 }
 
-target "element-web-modules" {
+target "_element_web_module_base" {
   inherits = ["_common"]
-  context = "./packages/element-web-module-api"
-  tag = "ghcr.io/element-hq/element-web-modules:latest"
-}
-
-target "module-base" {
-  inherits = ["_common"]
-  dockerfile = "./Dockerfile-bake-element-web-module"
-  contexts = {
-    "ghcr.io/element-hq/element-web-modules" = "target:element-web-modules",
-  }
+  dockerfile = "./packages/element-web-module-api/Dockerfile"
 }
 
 target "element-web-modules-opendesk-plugin" {
-  inherits = ["module-base"]
-  tag = "ghcr.io/element-hq/element-web-modules/opendesk-plugin:latest"
+  inherits = ["_element_web_module_base"]
+  tags = [
+    "ghcr.io/element-hq/element-web-modules/opendesk-plugin:latest",
+    "ghcr.io/element-hq/element-web-modules/opendesk-plugin:${BUILD_TAG}",
+    "registry.opencode.de/bmi/opendesk/components/supplier/element/images/opendesk-element-web:${BUILD_TAG}"
+  ]
   args = {
     ELEMENT_VERSION = "${ELEMENT_VERSION}"
     BUILD_CONTEXT = "modules/opendesk/element-web"
