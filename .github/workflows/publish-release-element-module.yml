@@ -78,6 +78,8 @@ jobs:
               run: |
                   set -x
 
+                  MODULE_PATH="modules/nordeck-plugin-v0.0.0/index.js"
+
                   # Spin up a container of the image
                   ELEMENT_WEB_PORT=8181
                   CONTAINER_ID=$(
@@ -89,7 +91,7 @@ jobs:
                   )
 
                   # Run some smoke tests
-                  wget --retry-connrefused --tries=5 -q --wait=3 --spider "http://localhost:$ELEMENT_WEB_PORT/modules/module_name/index.js"
+                  wget --retry-connrefused --tries=5 -q --wait=3 --spider "http://localhost:$ELEMENT_WEB_PORT/$MODULE_PATH"
                   MODULE_0=$(curl "http://localhost:$ELEMENT_WEB_PORT/config.json" | jq -r .modules[0])
                   test "$MODULE_0" = "/${MODULE_PATH}"
 
