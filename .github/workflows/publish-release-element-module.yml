@@ -12,13 +12,12 @@ jobs:
     build:
         name: Build
         runs-on: ubuntu-latest
+        environment: ${{ github.event_name != 'pull_request' && 'Docker' || '' }}
         timeout-minutes: 15
         permissions:
             contents: read
             packages: write
             id-token: write
-        env:
-            DOCKER_IMAGE: ghcr.io/element-hq/synapse-guest-module
         steps:
             - name: Generate Docker metadata of the existing image
               id: meta
@@ -35,6 +34,15 @@ jobs:
                       type=sha
 
             - name: Login to ghcr.io
+              if: github.event_name != 'pull_request'
+              uses: docker/login-action@v3
+              with:
+                  registry: ghcr.io
+                  username: ${{ github.repository_owner }}
+                  password: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Login to registry.opencode.de
+              if: github.event_name != 'pull_request'
               uses: docker/login-action@v3
               with:
                   registry: ghcr.io
@@ -42,36 +50,66 @@ jobs:
                   password: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Install Cosign
+              if: github.event_name != 'pull_request'
               uses: sigstore/cosign-installer@59acb6260d9c0ba8f4a2f9d9b48431a222b68e20 # @v3.5.0
 
             - name: Set up Docker Buildx
               uses: docker/setup-buildx-action@v3
 
             - name: Build
+              id: bake-load
               uses: docker/bake-action@v6.3.0
-              if: github.event_name == 'pull_request'
               with:
-                  files: |
-                      ./docker-bake.hcl
-                      cwd://${{ steps.meta.outputs.bake-file }}
-
-            - name: Build and push
-              id: bake
-              uses: docker/bake-action@v6.3.0
-              if: github.event_name != 'pull_request'
-              with:
+                  load: true
                   files: |
                       ./docker-bake.hcl
                       cwd://${{ steps.meta.outputs.bake-file }}
                   set: |
-                      _common.output=type=image,push=true
+                      element-web-modules-opendesk-plugin.tags=element-web-modules-opendesk-plugin.tags:latest
+
+            - name: Test the image
+              env:
+                  IMAGEID: element-web-modules-opendesk-plugin.tags:latest
+              run: |
+                  set -x
+
+                  # Spin up a container of the image
+                  ELEMENT_WEB_PORT=8181
+                  CONTAINER_ID=$(
+                      docker run \
+                          --rm \
+                          -e "ELEMENT_WEB_PORT=$ELEMENT_WEB_PORT" \
+                          -dp "$ELEMENT_WEB_PORT:$ELEMENT_WEB_PORT" \
+                          "$IMAGEID" \
+                  )
+
+                  # Run some smoke tests
+                  wget --retry-connrefused --tries=5 -q --wait=3 --spider "http://localhost:$ELEMENT_WEB_PORT/modules/module_name/index.js"
+                  MODULE_0=$(curl "http://localhost:$ELEMENT_WEB_PORT/config.json" | jq -r .modules[0])
+                  test "$MODULE_0" = "/${MODULE_PATH}"
+
+                  # Check healthcheck
+                  test "$(docker inspect -f {{.State.Running}} $CONTAINER_ID)" == "true"
+
+                  # Clean up
+                  docker stop "$CONTAINER_ID"
+
+            - name: Push
+              id: bake-push
+              uses: docker/bake-action@v6.3.0
+              if: github.event_name != 'pull_request'
+              with:
+                  push: true
+                  files: |
+                      ./docker-bake.hcl
+                      cwd://${{ steps.meta.outputs.bake-file }}
 
             - name: Transform bake output
               id: output
               if: github.event_name != 'pull_request'
               run: |
                   echo 'digests<<EOF' >> $GITHUB_OUTPUT
-                  echo '${{ steps.bake.outputs.metadata }}' | jq -r 'with_entries(select(.value | (type == "object" and has("containerimage.digest")))) | map_values(.["containerimage.digest"]) | to_entries[] | "\\(.key)@\\(.value)"' >> $GITHUB_OUTPUT
+                  echo '${{ steps.bake-push.outputs.metadata }}' | jq -r 'with_entries(select(.value | (type == "object" and has("containerimage.digest")))) | map_values(.["containerimage.digest"]) | to_entries[] | "\\(.key)@\\(.value)"' >> $GITHUB_OUTPUT
                   echo 'EOF' >> $GITHUB_OUTPUT
 
             - name: Sign the images with GitHub Actions provided token
