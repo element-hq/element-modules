@@ -21,7 +21,7 @@ jobs:
         steps:
             - name: Calculate variables
               run: |
-                  echo "DATE=$(date '+%y%m')01" >> $GITHUB_ENV
+                  echo "DATE=$(date '+%y%m%d')" >> $GITHUB_ENV
 
             - name: Generate Docker metadata of the existing image
               id: meta
@@ -70,11 +70,11 @@ jobs:
                       cwd://${{ steps.meta.outputs.bake-file }}
                   set: |
                       _common.platform=linux/amd64
-                      element-web-modules-opendesk-plugin.tags=element-web-modules-opendesk-plugin.tags:latest
+                      element-web-modules-opendesk-plugin.tags=element-web-modules-opendesk-plugin:latest
 
             - name: Test the image
               env:
-                  IMAGEID: element-web-modules-opendesk-plugin.tags:latest
+                  IMAGEID: element-web-modules-opendesk-plugin:latest
               run: |
                   set -x
 

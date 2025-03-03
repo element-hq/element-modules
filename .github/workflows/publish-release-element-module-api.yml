@@ -5,7 +5,7 @@ name: Release Element Web Module API
 on:
     push:
         tags:
-            - "element-web-module-api/*"
+            - "packages/element-web-module-api/*"
 
 jobs:
     release:
@@ -30,9 +30,7 @@ jobs:
               run: "yarn install --frozen-lockfile"
 
             - name: 🚀 Publish to npm
-              run: |
-                  npm publish --provenance --access public --tag latest
-                  release=$(jq -r '"\(.name)@\(.version)"' package.json)
-                  echo "id=$release" >> $GITHUB_OUTPUT
+              run: npm publish --provenance --access public --tag latest
+              working-directory: packages/element-web-module-api
               env:
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
