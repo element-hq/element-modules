@@ -69,6 +69,7 @@ jobs:
                       ./docker-bake.hcl
                       cwd://${{ steps.meta.outputs.bake-file }}
                   set: |
+                      _common.platform=linux/amd64
                       element-web-modules-opendesk-plugin.tags=element-web-modules-opendesk-plugin.tags:latest
 
             - name: Test the image
