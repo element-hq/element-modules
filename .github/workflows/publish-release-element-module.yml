@@ -19,6 +19,10 @@ jobs:
             packages: write
             id-token: write
         steps:
+            - name: Calculate variables
+              run: |
+                  echo "DATE=$(date '+%y%m')01" >> $GITHUB_ENV
+
             - name: Generate Docker metadata of the existing image
               id: meta
               uses: docker/metadata-action@v5
