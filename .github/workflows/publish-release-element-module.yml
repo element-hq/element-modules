@@ -116,7 +116,7 @@ jobs:
               if: github.event_name != 'pull_request'
               run: |
                   echo 'digests<<EOF' >> $GITHUB_OUTPUT
-                  echo '${{ steps.bake-push.outputs.metadata }}' | jq -r 'with_entries(select(.value | (type == "object" and has("containerimage.digest")))) | map_values(.["containerimage.digest"]) | to_entries[] | "\(.key)@\(.value)"' >> $GITHUB_OUTPUT
+                  echo '${{ steps.bake-push.outputs.metadata }}' | jq -r 'with_entries(select(.value | (type == "object" and has("containerimage.digest")))) | map(. as $parent | (.["image.name"] | split(",") | map(. + "@" + $parent.["containerimage.digest"]))) | flatten | .[]' >> $GITHUB_OUTPUT
                   echo 'EOF' >> $GITHUB_OUTPUT
 
             - name: Sign the images with GitHub Actions provided token
