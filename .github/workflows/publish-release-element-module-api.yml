@@ -1,0 +1,36 @@
+# This pipeline runs for every new tag. It will pull the docker container for
+# the commit hash of the tag, and will publish it as `:<tag-name>` and `latest`.
+name: Release Element Web Module API
+
+on:
+    push:
+        tags:
+            - "packages/element-web-module-api/*"
+
+jobs:
+    release:
+        name: Release
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        permissions:
+            contents: read
+            id-token: write
+        steps:
+            - name: 🧮 Checkout code
+              uses: actions/checkout@v4
+
+            - name: 🔧 Yarn cache
+              uses: actions/setup-node@v4
+              with:
+                  cache: "yarn"
+                  registry-url: "https://registry.npmjs.org"
+                  node-version-file: package.json
+
+            - name: 🔨 Install dependencies
+              run: "yarn install --frozen-lockfile"
+
+            - name: 🚀 Publish to npm
+              run: npm publish --provenance --access public --tag latest
+              working-directory: packages/element-web-module-api
+              env:
+                  NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

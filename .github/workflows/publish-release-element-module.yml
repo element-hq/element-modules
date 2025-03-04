@@ -1,0 +1,127 @@
+# This pipeline runs for every new tag. It will pull the docker container for
+# the commit hash of the tag, and will publish it as `:<tag-name>` and `latest`.
+name: Release Element Web Module containers
+
+on:
+    pull_request: {}
+    push:
+        tags:
+            - "module/opendesk@*"
+
+jobs:
+    build:
+        name: Build
+        runs-on: ubuntu-latest
+        environment: ${{ github.event_name != 'pull_request' && 'Docker' || '' }}
+        timeout-minutes: 15
+        permissions:
+            contents: read
+            packages: write
+            id-token: write
+        steps:
+            - name: Calculate variables
+              run: |
+                  echo "DATE=$(date '+%y%m%d')" >> $GITHUB_ENV
+
+            - name: Generate Docker metadata of the existing image
+              id: meta
+              uses: docker/metadata-action@v5
+              with:
+                  bake-target: docker-metadata-action
+                  flavor: |
+                      latest=auto
+                  tags: |
+                      type=ref,event=branch
+                      type=semver,pattern={{version}}
+                      type=semver,pattern={{major}}.{{minor}}
+                      type=semver,pattern={{major}}
+                      type=sha
+
+            - name: Login to ghcr.io
+              if: github.event_name != 'pull_request'
+              uses: docker/login-action@v3
+              with:
+                  registry: ghcr.io
+                  username: ${{ github.repository_owner }}
+                  password: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Login to registry.opencode.de
+              if: github.event_name != 'pull_request'
+              uses: docker/login-action@v3
+              with:
+                  registry: ghcr.io
+                  username: ${{ github.repository_owner }}
+                  password: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Install Cosign
+              if: github.event_name != 'pull_request'
+              uses: sigstore/cosign-installer@59acb6260d9c0ba8f4a2f9d9b48431a222b68e20 # @v3.5.0
+
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@v3
+
+            - name: Build
+              id: bake-load
+              uses: docker/bake-action@v6.3.0
+              with:
+                  load: true
+                  files: |
+                      ./docker-bake.hcl
+                      cwd://${{ steps.meta.outputs.bake-file }}
+                  set: |
+                      _common.platform=linux/amd64
+                      element-web-modules-opendesk-plugin.tags=element-web-modules-opendesk-plugin:latest
+
+            - name: Test the image
+              env:
+                  IMAGEID: element-web-modules-opendesk-plugin:latest
+              run: |
+                  set -x
+
+                  MODULE_PATH="modules/nordeck-plugin-v0.0.0/index.js"
+
+                  # Spin up a container of the image
+                  ELEMENT_WEB_PORT=8181
+                  CONTAINER_ID=$(
+                      docker run \
+                          --rm \
+                          -e "ELEMENT_WEB_PORT=$ELEMENT_WEB_PORT" \
+                          -dp "$ELEMENT_WEB_PORT:$ELEMENT_WEB_PORT" \
+                          "$IMAGEID" \
+                  )
+
+                  # Run some smoke tests
+                  wget --retry-connrefused --tries=5 -q --wait=3 --spider "http://localhost:$ELEMENT_WEB_PORT/$MODULE_PATH"
+                  MODULE_0=$(curl "http://localhost:$ELEMENT_WEB_PORT/config.json" | jq -r .modules[0])
+                  test "$MODULE_0" = "/${MODULE_PATH}"
+
+                  # Check healthcheck
+                  test "$(docker inspect -f {{.State.Running}} $CONTAINER_ID)" == "true"
+
+                  # Clean up
+                  docker stop "$CONTAINER_ID"
+
+            - name: Push
+              id: bake-push
+              uses: docker/bake-action@v6.3.0
+              if: github.event_name != 'pull_request'
+              with:
+                  push: true
+                  files: |
+                      ./docker-bake.hcl
+                      cwd://${{ steps.meta.outputs.bake-file }}
+
+            - name: Transform bake output
+              id: output
+              if: github.event_name != 'pull_request'
+              run: |
+                  echo 'digests<<EOF' >> $GITHUB_OUTPUT
+                  echo '${{ steps.bake-push.outputs.metadata }}' | jq -r 'with_entries(select(.value | (type == "object" and has("containerimage.digest")))) | map_values(.["containerimage.digest"]) | to_entries[] | "\\(.key)@\\(.value)"' >> $GITHUB_OUTPUT
+                  echo 'EOF' >> $GITHUB_OUTPUT
+
+            - name: Sign the images with GitHub Actions provided token
+              # Only sign on tags and on commits on main branch
+              if: github.event_name != 'pull_request'
+              run: cosign sign --yes $DIGESTS
+              env:
+                  DIGESTS: ${{ steps.output.outputs.digests }}
