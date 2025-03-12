@@ -45,7 +45,7 @@ jobs:
                       !**/node_modules/**
 
     playwright:
-        name: Run tests & upload coverage reports
+        name: Run Playwright end-to-end tests & upload html report
         runs-on: ubuntu-24.04-arm
         steps:
             - uses: actions/checkout@v4
@@ -82,5 +82,5 @@ jobs:
               uses: actions/upload-artifact@v4
               with:
                   name: playwright-html-report
-                  path: playwright/html-report
+                  path: playwright-report
                   retention-days: 14
