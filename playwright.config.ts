@@ -5,8 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
 Please see LICENSE files in the repository root for full details.
 */
 
-import { defineConfig, devices } from "@playwright/test";
-import { type Project } from "playwright/types/test";
+import { defineConfig, devices, type Project } from "@playwright/test";
 import { globSync } from "glob";
 import fs from "node:fs";
 import path from "node:path";
