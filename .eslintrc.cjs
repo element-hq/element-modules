@@ -53,6 +53,13 @@ module.exports = {
                 "@typescript-eslint/explicit-function-return-type": "off",
             },
         },
+        {
+            files: ["modules/*/element-web/**/*.tsx"],
+            rules: {
+                // Doesn't play nicely with styled-components
+                "@typescript-eslint/explicit-function-return-type": "off",
+            },
+        },
     ],
     settings: {
         react: {
