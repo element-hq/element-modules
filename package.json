@@ -19,7 +19,6 @@
     "devDependencies": {
         "@action-validator/cli": "^0.6.0",
         "@action-validator/core": "^0.6.0",
-        "@element-hq/element-web-playwright-common": "*",
         "@playwright/test": "^1.50.1",
         "@stylistic/eslint-plugin": "^3.0.0",
         "@types/node": "^22.12.0",
