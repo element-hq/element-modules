@@ -40,6 +40,16 @@ module.exports = {
 
         "react-compiler/react-compiler": "error",
     },
+    overrides: [
+        {
+            files: ["packages/element-web-playwright-common/**/*.ts"],
+            rules: {
+                "no-empty-pattern": "off",
+                "react-hooks/rules-of-hooks": "off",
+                "@typescript-eslint/explicit-function-return-type": "off",
+            },
+        },
+    ],
     settings: {
         react: {
             version: "detect",
