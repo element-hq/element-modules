@@ -10,6 +10,7 @@
       <excludeFolder url="file://$MODULE_DIR$/modules/example/element-web/lib" />
       <excludeFolder url="file://$MODULE_DIR$/packages/element-web-module-api/lib" />
       <excludeFolder url="file://$MODULE_DIR$/modules/opendesk/element-web/lib" />
+      <excludeFolder url="file://$MODULE_DIR$/packages/element-web-playwright-common/lib" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
