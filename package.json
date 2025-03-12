@@ -16,6 +16,9 @@
         "lint": "yarn workspaces run lint",
         "lint:knip": "knip",
         "test": "yarn workspaces run test",
+        "test:playwright": "playwright test",
+        "test:playwright:open": "yarn test:playwright --ui",
+        "test:playwright:screenshots": "playwright-screenshots",
         "prepare": "husky && yarn workspaces run prepare"
     },
     "devDependencies": {

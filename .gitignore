@@ -145,3 +145,12 @@ _trial_temp/
 lib/
 temp/
 coverage/
+
+/playwright-html-report/
+**/test-results
+**/_results
+# Only commit snapshots from Linux
+**/tests/snapshots/**/*.png
+**/tests/snapshots/**/*.yml
+!**/tests/snapshots/**/*-linux.png
+!**/tests/snapshots/**/*-linux.yml
