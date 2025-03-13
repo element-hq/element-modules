@@ -42,7 +42,11 @@ module.exports = {
     },
     overrides: [
         {
-            files: ["packages/element-web-playwright-common/**/*.ts"],
+            files: [
+                "packages/element-web-playwright-common/**/*.ts",
+                "playwright/**/*.ts",
+                "modules/*/element-web/tests/**/*.{ts,tsx}",
+            ],
             rules: {
                 // This is necessary for Playwright fixtures
                 "no-empty-pattern": "off",

@@ -43,3 +43,43 @@ jobs:
                       **/coverage
                       !**/coverage/lcov-report
                       !**/node_modules/**
+
+    playwright:
+        name: Run Playwright end-to-end tests & upload html report
+        runs-on: ubuntu-24.04-arm
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: actions/setup-node@v4
+              with:
+                  cache: "yarn"
+                  node-version: "lts/*"
+
+            - name: Install Deps
+              run: "yarn install --frozen-lockfile"
+
+            - name: Get installed Playwright version
+              id: playwright
+              run: echo "version=$(yarn list --pattern @playwright/test --depth=0 --json --non-interactive --no-progress | jq -r '.data.trees[].name')" >> "$GITHUB_OUTPUT"
+
+            - name: Cache playwright binaries
+              uses: actions/cache@v4
+              id: playwright-cache
+              with:
+                  path: ~/.cache/ms-playwright
+                  key: ${{ runner.os }}-playwright-${{ steps.playwright.outputs.version }}
+
+            - name: Install Playwright browsers
+              if: steps.playwright-cache.outputs.cache-hit != 'true'
+              run: yarn playwright install --with-deps --no-shell
+
+            - name: Run Playwright tests
+              run: yarn playwright test --reporter=html
+
+            - name: Upload blob report to GitHub Actions Artifacts
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: playwright-html-report
+                  path: playwright-report
+                  retention-days: 14
