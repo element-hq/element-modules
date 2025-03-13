@@ -44,8 +44,11 @@ module.exports = {
         {
             files: ["packages/element-web-playwright-common/**/*.ts"],
             rules: {
+                // This is necessary for Playwright fixtures
                 "no-empty-pattern": "off",
+                // This is necessary for Playwright fixtures
                 "react-hooks/rules-of-hooks": "off",
+                // This just gets annoying in test code
                 "@typescript-eslint/explicit-function-return-type": "off",
             },
         },
