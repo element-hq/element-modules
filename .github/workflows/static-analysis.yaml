@@ -23,6 +23,7 @@ jobs:
                     - lint:workflows
                     - lint:prettier
                     - lint:knip
+                    - lint:workflows
         steps:
             - uses: actions/checkout@v4
 
