@@ -1,12 +1,11 @@
-# This pipeline runs for every new tag. It will pull the docker container for
-# the commit hash of the tag, and will publish it as `:<tag-name>` and `latest`.
+# This pipeline runs for every new packages/* tag.
+# If the path matching that tag contains a package.json without `private: true` it will publish the package to npm.
 name: Publish npm package
 
 on:
     push:
         tags:
-            - "packages/element-web-module-api/*"
-            - "packages/element-web-playwright-common/*"
+            - "packages/*"
 
 jobs:
     release:
@@ -32,12 +31,17 @@ jobs:
 
             - name: 🔖 Parse tag
               id: parse
-              run: echo "pkg=$(dirname $TAG)" >> $GITHUB_OUTPUT
+              run: |
+                  PKG=$(dirname $TAG)
+                  if [[ -d $PKG && "$(cat "$PKG/package.json" | jq -r .private)" != "true" ]]; then
+                      echo "pkg=$PKG" >> $GITHUB_OUTPUT
+                  fi
               env:
                   TAG: ${{ github.ref_name }}
 
             - name: 🚀 Publish to npm
               run: npm publish --provenance --access public --tag latest
+              if: steps.parse.outputs.pkg
               working-directory: ${{ steps.parse.outputs.pkg }}
               env:
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
