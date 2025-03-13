@@ -1,11 +1,12 @@
 # This pipeline runs for every new tag. It will pull the docker container for
 # the commit hash of the tag, and will publish it as `:<tag-name>` and `latest`.
-name: Release Element Web Module API
+name: Publish npm package
 
 on:
     push:
         tags:
             - "packages/element-web-module-api/*"
+            - "packages/element-web-playwright-common/*"
 
 jobs:
     release:
@@ -29,8 +30,14 @@ jobs:
             - name: 🔨 Install dependencies
               run: "yarn install --frozen-lockfile"
 
+            - name: 🔖 Parse tag
+              id: parse
+              run: echo "pkg=$(dirname $TAG)" >> $GITHUB_OUTPUT
+              env:
+                  TAG: ${{ github.ref_name }}
+
             - name: 🚀 Publish to npm
               run: npm publish --provenance --access public --tag latest
-              working-directory: packages/element-web-module-api
+              working-directory: ${{ steps.parse.outputs.pkg }}
               env:
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
