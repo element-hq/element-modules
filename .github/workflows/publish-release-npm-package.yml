@@ -5,7 +5,7 @@ name: Publish npm package
 on:
     push:
         tags:
-            - "packages/*"
+            - "packages/*/*"
 
 jobs:
     release:
@@ -33,8 +33,8 @@ jobs:
               id: parse
               run: |
                   PKG=$(dirname $TAG)
-                  if [[ -d $PKG && "$(cat "$PKG/package.json" | jq -r .private)" != "true" ]]; then
-                      echo "pkg=$PKG" >> $GITHUB_OUTPUT
+                  if jq -e '.private != true' "$PKG/package.json" >/dev/null; then
+                      echo "pkg=$PKG" >> "$GITHUB_OUTPUT"
                   fi
               env:
                   TAG: ${{ github.ref_name }}
