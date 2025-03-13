@@ -5,8 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
 Please see LICENSE files in the repository root for full details.
 */
 
-import { defineConfig, devices } from "@playwright/test";
-import { type Project } from "playwright/types/test";
+import { defineConfig, devices, type Project } from "@playwright/test";
 import { globSync } from "glob";
 import fs from "node:fs";
 import path from "node:path";
@@ -63,7 +62,7 @@ export default defineConfig<Options>({
     },
     workers: 1,
     retries: process.env.CI ? 2 : 0,
-    reporter: process.env.CI ? [["blob"], ["github"]] : [["html", { outputFolder: "playwright-html-report" }]],
+    reporter: process.env.CI ? [["html"], ["github"]] : [["html", { outputFolder: "playwright-html-report" }]],
     snapshotPathTemplate: "{snapshotDir}/{testFilePath}/{arg}-{platform}{ext}",
     forbidOnly: !!process.env.CI,
 });
