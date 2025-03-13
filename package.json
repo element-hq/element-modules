@@ -6,6 +6,9 @@
         "modules/*/element-web",
         "modules/*/synapse"
     ],
+    "engines": {
+        "node": ">=20.0.0"
+    },
     "scripts": {
         "lint:workflows": "find .github/workflows -type f \\( -iname '*.yaml' -o -iname '*.yml' \\) | xargs -I {} sh -c 'echo \"Linting {}\"; action-validator \"{}\"'",
         "lint:prettier": "prettier --check .",

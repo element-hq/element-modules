@@ -1,11 +1,20 @@
 {
     "name": "@element-hq/element-web-playwright-common",
     "type": "module",
-    "version": "1.1.0",
+    "version": "1.1.5",
     "license": "SEE LICENSE IN README.md",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/element-hq/element-modules.git",
+        "directory": "packages/element-web-playwright-common"
+    },
+    "author": "element-hq",
+    "engines": {
+        "node": ">=20.0.0"
+    },
     "main": "lib/index.js",
     "bin": {
-        "playwright-screenshots": "./playwright-screenshots.sh"
+        "playwright-screenshots": "playwright-screenshots.sh"
     },
     "scripts": {
         "prepare": "tsc",
