@@ -16,9 +16,6 @@ export default {
         "@matrix-org/react-sdk-module-api",
         // Unlisted peer dependency for @matrix-org/react-sdk-module-api
         "matrix-web-i18n",
-        // Needed to satisfy the peer dependency of @element-hq/element-web-playwright-common
-        "@playwright/test",
-        "@element-hq/element-web-module-api",
     ],
     entry: [
         "packages/element-web-playwright-common/src/testcontainers/*",
