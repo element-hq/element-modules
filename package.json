@@ -18,7 +18,6 @@
         "lint:py": "yarn workspace @element-hq/synapse-guest-module run lint",
         "lint": "yarn workspaces run lint",
         "lint:knip": "knip",
-        "lint:workflows": "find .github/workflows -type f \\( -iname '*.yaml' -o -iname '*.yml' \\) | xargs -I {} sh -c 'echo \"Linting {}\"; action-validator \"{}\"'",
         "test": "yarn workspaces run test",
         "test:playwright": "playwright test",
         "test:playwright:open": "yarn test:playwright --ui",
