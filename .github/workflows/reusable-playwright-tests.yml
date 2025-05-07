@@ -7,6 +7,8 @@ on:
                 description: Name of the artifact containing the webapp bundle to test, only intended for downstream testing from element-web.
                 type: string
 
+permissions: {}
+
 jobs:
     playwright:
         name: Run Playwright end-to-end tests & upload html report
