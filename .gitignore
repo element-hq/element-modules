@@ -154,3 +154,4 @@ coverage/
 **/tests/snapshots/**/*.yml
 !**/tests/snapshots/**/*-linux.png
 !**/tests/snapshots/**/*-linux.yml
+/playwright-report/
