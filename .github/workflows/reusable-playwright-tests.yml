@@ -1,0 +1,67 @@
+name: Playwright
+on:
+    workflow_call:
+        inputs:
+            webapp-artifact:
+                required: false
+                description: Name of the artifact containing the webapp bundle to test, only intended for downstream testing from element-web.
+                type: string
+
+permissions: {}
+
+jobs:
+    playwright:
+        name: Run Playwright end-to-end tests & upload html report
+        runs-on: ubuntu-24.04-arm
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  repository: ${{ inputs.webapp-artifact && 'element-hq/element-modules' || github.repository }}
+
+            - uses: actions/setup-node@v4
+              with:
+                  cache: "yarn"
+                  node-version: "lts/*"
+
+            - name: Install Deps
+              run: "yarn install --frozen-lockfile"
+
+            - name: Get installed Playwright version
+              id: playwright
+              run: echo "version=$(yarn list --pattern @playwright/test --depth=0 --json --non-interactive --no-progress | jq -r '.data.trees[].name')" >> "$GITHUB_OUTPUT"
+
+            - name: Cache playwright binaries
+              uses: actions/cache@v4
+              id: playwright-cache
+              with:
+                  path: ~/.cache/ms-playwright
+                  key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ steps.playwright.outputs.version }}
+
+            - name: Install Playwright browsers
+              if: steps.playwright-cache.outputs.cache-hit != 'true'
+              run: yarn playwright install --with-deps --no-shell
+
+            - name: Fetch webapp
+              if: inputs.webapp-artifact
+              uses: actions/download-artifact@v4
+              with:
+                  name: ${{ inputs.webapp-artifact }}
+                  path: webapp
+            - name: Run webapp
+              if: inputs.webapp-artifact
+              uses: Eun/http-server-action@f71cec1321f665652a46c40b6852f8e5a68bfcd4 # v1
+              with:
+                  directory: webapp
+                  port: 8080
+                  index-files: '["index.html"]'
+
+            - name: Run Playwright tests
+              run: yarn playwright test --reporter=html
+
+            - name: Upload blob report to GitHub Actions Artifacts
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: playwright-html-report
+                  path: playwright-report
+                  retention-days: 14
