@@ -16,6 +16,8 @@
       <excludeFolder url="file://$MODULE_DIR$/modules/banner/element-web/lib" />
       <excludeFolder url="file://$MODULE_DIR$/modules/banner/element-web/tests/_results" />
       <excludeFolder url="file://$MODULE_DIR$/.venv" />
+      <excludeFolder url="file://$MODULE_DIR$/packages/element-web-module-api/coverage" />
+      <excludeFolder url="file://$MODULE_DIR$/playwright-report" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
