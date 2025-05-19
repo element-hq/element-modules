@@ -3,21 +3,18 @@
   <component name="NewModuleRootManager">
     <content url="file://$MODULE_DIR$">
       <excludeFolder url="file://$MODULE_DIR$/.tmp" />
-      <excludeFolder url="file://$MODULE_DIR$/modules/example/lib" />
-      <excludeFolder url="file://$MODULE_DIR$/plugin-engine/lib" />
       <excludeFolder url="file://$MODULE_DIR$/temp" />
       <excludeFolder url="file://$MODULE_DIR$/tmp" />
-      <excludeFolder url="file://$MODULE_DIR$/modules/example/element-web/lib" />
-      <excludeFolder url="file://$MODULE_DIR$/packages/element-web-module-api/lib" />
-      <excludeFolder url="file://$MODULE_DIR$/modules/opendesk/element-web/lib" />
-      <excludeFolder url="file://$MODULE_DIR$/packages/element-web-playwright-common/lib" />
-      <excludeFolder url="file://$MODULE_DIR$/modules/opendesk/element-web/tests/_results" />
       <excludeFolder url="file://$MODULE_DIR$/playwright-html-report" />
-      <excludeFolder url="file://$MODULE_DIR$/modules/banner/element-web/lib" />
-      <excludeFolder url="file://$MODULE_DIR$/modules/banner/element-web/tests/_results" />
-      <excludeFolder url="file://$MODULE_DIR$/.venv" />
-      <excludeFolder url="file://$MODULE_DIR$/packages/element-web-module-api/coverage" />
       <excludeFolder url="file://$MODULE_DIR$/playwright-report" />
+      <excludeFolder url="file://$MODULE_DIR$/.venv" />
+      <excludePattern pattern="*/lib/*" />
+      <excludePattern pattern="*/_results/*" />
+      <excludePattern pattern="*/coverage/*" />
+      <excludePattern pattern="*/test-results/*" />
+      <excludePattern pattern="*.egg-info" />
+      <excludePattern pattern="*.js" />
+      <excludePattern pattern="*.js.map" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
