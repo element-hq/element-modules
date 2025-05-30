@@ -4,6 +4,8 @@
 
 ```ts
 
+import { JSX } from 'react';
+import { MatrixEvent } from 'matrix-js-sdk';
 import { ModuleApi } from '@matrix-org/react-sdk-module-api';
 import { Root } from 'react-dom/client';
 import { RuntimeModule } from '@matrix-org/react-sdk-module-api';
@@ -21,6 +23,7 @@ export interface AliasCustomisations {
 export interface Api extends LegacyModuleApiExtension, LegacyCustomisationsApiExtension {
     readonly config: ConfigApi;
     createRoot(element: Element): Root;
+    readonly customComponents: CustomComponentsApi;
     readonly i18n: I18nApi;
     readonly rootNode: HTMLElement;
 }
@@ -56,6 +59,27 @@ export interface ConfigApi {
     // (undocumented)
     get<K extends keyof Config = never>(key?: K): Config | Config[K];
 }
+
+// @public
+export interface CustomComponentsApi {
+    // Warning: (ae-incompatible-release-tags) The symbol "registerMessageRenderer" is marked as @public, but its signature references "CustomMessageRenderFunction" which is marked as @beta
+    registerMessageRenderer(eventType: string | RegExp, renderer: CustomMessageRenderFunction): void;
+}
+
+// @alpha
+export type CustomMessageComponentProps = {
+    mxEvent: MatrixEvent;
+    highlights?: string[];
+    showUrlPreview?: boolean;
+    forExport?: boolean;
+};
+
+// Warning: (ae-incompatible-release-tags) The symbol "CustomMessageRenderFunction" is marked as @beta, but its signature references "CustomMessageComponentProps" which is marked as @alpha
+//
+// @beta
+export type CustomMessageRenderFunction = (
+props: CustomMessageComponentProps,
+originalComponent?: () => React.JSX.Element) => JSX.Element | null;
 
 // @alpha @deprecated (undocumented)
 export interface DirectoryCustomisations {
