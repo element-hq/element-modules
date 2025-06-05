@@ -10,6 +10,8 @@ import { LegacyModuleApiExtension } from "./legacy-modules";
 import { LegacyCustomisationsApiExtension } from "./legacy-customisations";
 import { ConfigApi } from "./config";
 import { I18nApi } from "./i18n";
+import type { MatrixClient } from "matrix-js-sdk/lib/matrix";
+import { MenusApi } from "./menus";
 
 /**
  * Module interface for modules to implement.
@@ -86,6 +88,18 @@ export interface Api extends LegacyModuleApiExtension, LegacyCustomisationsApiEx
      * @public
      */
     readonly rootNode: HTMLElement;
+
+    /**
+     * API to include new menu items in Element.
+     * @public
+     */
+    readonly menuApi: MenusApi;
+
+    /**
+     * The Matrix client associated with the session.
+     * @throws If the client is not read yet, this will throw.
+     */
+    readonly matrixClient: MatrixClient;
     /**
      * Create a ReactDOM root for rendering React components.
      * Exposed to allow modules to avoid needing to bundle their own ReactDOM.
