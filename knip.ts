@@ -20,5 +20,6 @@ export default {
     entry: [
         "packages/element-web-playwright-common/src/testcontainers/*",
         "packages/element-web-playwright-common/src/fixtures/services.ts",
+        "packages/element-web-playwright-common/src/stale-screenshot-reporter.ts",
     ],
 } satisfies KnipConfig;
