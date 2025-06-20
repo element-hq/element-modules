@@ -56,7 +56,7 @@ jobs:
                   index-files: '["index.html"]'
 
             - name: Run Playwright tests
-              run: yarn playwright test --reporter=html
+              run: yarn playwright test --reporter=html,@element-hq/element-web-playwright-common/lib/stale-screenshot-reporter.js
 
             - name: Upload blob report to GitHub Actions Artifacts
               if: always()
