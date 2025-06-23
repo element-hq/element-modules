@@ -31,7 +31,6 @@ export interface Api extends LegacyModuleApiExtension, LegacyCustomisationsApiEx
 
 // @public (undocumented)
 export interface BrandApi {
-    registerFaviconRenderer(renderFunction: FaviconRenderFunction): void;
     registerTitleRenderer(renderFunction: TitleRenderFunction): void;
 }
 
@@ -92,15 +91,6 @@ export interface DirectoryCustomisations {
     // (undocumented)
     requireCanonicalAliasAccessToPublish?(): boolean;
 }
-
-// @public
-export type FaviconRenderFunction = (opts: FaviconRenderOptions) => string;
-
-// @public
-export type FaviconRenderOptions = {
-    notificationCount?: number;
-    errorDidOccur: boolean;
-};
 
 // @public
 export interface I18nApi {
