@@ -20,12 +20,18 @@ export interface AliasCustomisations {
 //
 // @public
 export interface Api extends LegacyModuleApiExtension, LegacyCustomisationsApiExtension {
+    readonly brand: BrandApi;
     readonly config: ConfigApi;
     createRoot(element: Element): Root;
     // @alpha
     readonly customComponents: CustomComponentsApi;
     readonly i18n: I18nApi;
     readonly rootNode: HTMLElement;
+}
+
+// @public (undocumented)
+export interface BrandApi {
+    registerTitleRenderer(renderFunction: TitleRenderFunction): void;
 }
 
 // @alpha @deprecated (undocumented)
@@ -228,6 +234,18 @@ export interface RoomListCustomisations<Room> {
 
 // @alpha @deprecated (undocumented)
 export type RuntimeModuleConstructor = new (api: ModuleApi) => RuntimeModule;
+
+// @public
+export type TitleRenderFunction = (opts: TitleRenderOptions) => string;
+
+// @public
+export type TitleRenderOptions = {
+    notificationCount?: number;
+    errorDidOccur?: boolean;
+    roomId?: string;
+    roomName?: string;
+    notificationsEnabled?: boolean;
+};
 
 // @public
 export type Translations = Record<string, {
