@@ -100,6 +100,7 @@ export interface Api extends LegacyModuleApiExtension, LegacyCustomisationsApiEx
      * @public
      */
     readonly brand: BrandApi;
+
     /**
      * Create a ReactDOM root for rendering React components.
      * Exposed to allow modules to avoid needing to bundle their own ReactDOM.

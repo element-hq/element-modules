@@ -1,5 +1,12 @@
+/*
+Copyright 2025 New Vector Ltd.
+
+SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+Please see LICENSE files in the repository root for full details.
+*/
+
 /**
- * Options to be used when rendering a favicon. This represents
+ * Options to be used when rendering the window title. This represents
  * the state of the application.
  * @public
  */
@@ -9,7 +16,7 @@ export type TitleRenderOptions = {
      */
     notificationCount?: number;
     /**
-     * Has an error occured (e.g. failure to sync) and should be represented in the favicon's badge.
+     * Has an error occured (e.g. failure to sync).
      */
     errorDidOccur?: boolean;
     /**
