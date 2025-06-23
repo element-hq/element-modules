@@ -11,6 +11,7 @@ import { LegacyCustomisationsApiExtension } from "./legacy-customisations";
 import { ConfigApi } from "./config";
 import { I18nApi } from "./i18n";
 import { CustomComponentsApi } from "./custom-components";
+import { BrandApi } from "./brand";
 
 /**
  * Module interface for modules to implement.
@@ -93,6 +94,12 @@ export interface Api extends LegacyModuleApiExtension, LegacyCustomisationsApiEx
      * @alpha
      */
     readonly customComponents: CustomComponentsApi;
+
+    /**
+     * The brand API.
+     * @public
+     */
+    readonly brand: BrandApi;
     /**
      * Create a ReactDOM root for rendering React components.
      * Exposed to allow modules to avoid needing to bundle their own ReactDOM.
