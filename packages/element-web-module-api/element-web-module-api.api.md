@@ -4,10 +4,25 @@
 
 ```ts
 
+import { ComponentType } from 'react';
 import { JSX } from 'react';
 import { ModuleApi } from '@matrix-org/react-sdk-module-api';
 import { Root } from 'react-dom/client';
 import { RuntimeModule } from '@matrix-org/react-sdk-module-api';
+
+// @public
+export interface AccountAuthApiExtension {
+    overwriteAccountAuth(accountInfo: AccountAuthInfo): Promise<void>;
+}
+
+// @public
+export interface AccountAuthInfo {
+    accessToken: string;
+    deviceId: string;
+    homeserverUrl: string;
+    refreshToken?: string;
+    userId: string;
+}
 
 // @alpha @deprecated (undocumented)
 export interface AliasCustomisations {
@@ -19,12 +34,13 @@ export interface AliasCustomisations {
 // Warning: (ae-incompatible-release-tags) The symbol "Api" is marked as @public, but its signature references "LegacyCustomisationsApiExtension" which is marked as @alpha
 //
 // @public
-export interface Api extends LegacyModuleApiExtension, LegacyCustomisationsApiExtension {
+export interface Api extends LegacyModuleApiExtension, LegacyCustomisationsApiExtension, DialogApiExtension, AccountAuthApiExtension, ProfileApiExtension {
     readonly config: ConfigApi;
     createRoot(element: Element): Root;
     // @alpha
     readonly customComponents: CustomComponentsApi;
     readonly i18n: I18nApi;
+    readonly navigation: NavigationApi;
     readonly rootNode: HTMLElement;
 }
 
@@ -63,6 +79,7 @@ export interface ConfigApi {
 // @alpha
 export interface CustomComponentsApi {
     registerMessageRenderer(eventTypeOrFilter: string | ((mxEvent: MatrixEvent) => boolean), renderer: CustomMessageRenderFunction, hints?: CustomMessageRenderHints): void;
+    registerRoomPreviewBar(renderer: CustomRoomPreviewBarRenderFunction): void;
 }
 
 // @alpha
@@ -73,12 +90,48 @@ export type CustomMessageComponentProps = {
 // @alpha
 export type CustomMessageRenderFunction = (
 props: CustomMessageComponentProps,
-originalComponent?: (props?: OriginalComponentProps) => React.JSX.Element) => JSX.Element;
+originalComponent?: (props?: OriginalMessageComponentProps) => React.JSX.Element) => JSX.Element;
 
 // @alpha
 export type CustomMessageRenderHints = {
     allowEditingEvent?: boolean;
     allowDownloadingMedia?: (mxEvent: MatrixEvent) => Promise<boolean>;
+};
+
+// @alpha
+export type CustomRoomPreviewBarComponentProps = {
+    roomId?: string;
+    roomAlias?: string;
+};
+
+// @alpha
+export type CustomRoomPreviewBarRenderFunction = (
+props: CustomRoomPreviewBarComponentProps,
+originalComponent: (props: CustomRoomPreviewBarComponentProps) => JSX.Element) => JSX.Element;
+
+// @public
+export interface DialogApiExtension {
+    openDialog<M, P extends object>(initialOptions: DialogOptions, dialog: ComponentType<P & DialogProps<M>>, props: P): DialogHandle<M>;
+}
+
+// @public
+export type DialogHandle<M> = {
+    finished: Promise<{
+        ok: boolean;
+        model: M | null;
+    }>;
+    close(): void;
+};
+
+// @public
+export interface DialogOptions {
+    title: string;
+}
+
+// @public
+export type DialogProps<M> = {
+    onSubmit(model: M): void;
+    onCancel(): void;
 };
 
 // @alpha @deprecated (undocumented)
@@ -217,10 +270,27 @@ export class ModuleLoader {
     start(): Promise<void>;
 }
 
+// @public
+export interface NavigationApi {
+    toMatrixToLink(link: string, join?: boolean): Promise<void>;
+}
+
 // @alpha
-export type OriginalComponentProps = {
+export type OriginalMessageComponentProps = {
     showUrlPreview?: boolean;
 };
+
+// @public
+export interface Profile {
+    displayName?: string;
+    isGuest?: boolean;
+    userId?: string;
+}
+
+// @public
+export interface ProfileApiExtension {
+    readonly profile: Watchable<Profile>;
+}
 
 // @alpha @deprecated (undocumented)
 export interface RoomListCustomisations<Room> {
@@ -244,10 +314,25 @@ export interface UserIdentifierCustomisations {
 }
 
 // @public
+export function useWatchable<T>(watchable: Watchable<T>): T;
+
+// @public
 export type Variables = {
     count?: number;
     [key: string]: number | string | undefined;
 };
+
+// @public
+export class Watchable<T> {
+    constructor(currentValue: T);
+    // (undocumented)
+    unwatch(listener: (value: T) => void): void;
+    // (undocumented)
+    get value(): T;
+    set value(value: T);
+    // (undocumented)
+    watch(listener: (value: T) => void): void;
+}
 
 // @alpha @deprecated (undocumented)
 export interface WidgetPermissionsCustomisations<Widget, Capability> {
