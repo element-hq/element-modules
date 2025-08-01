@@ -71,6 +71,31 @@ export type CustomMessageRenderFunction = (
  * Properties for all message components.
  * @alpha Subject to change.
  */
+export type MessageProfileComponentProps = {
+    userId: string;
+    disambiguatedName?: string;
+    avatarUrl: string;
+};
+
+/**
+ * Function used to render a message profile
+ * @alpha Subject to change.
+ */
+export type MessageProfileRenderFunction = (
+    /**
+     * Properties for the message to be renderered.
+     */
+    props: MessageProfileComponentProps,
+    /**
+     * Render function for the original component. This may be omitted if the message would not normally be rendered.
+     */
+    originalComponent?: (props: MessageProfileComponentProps) => React.JSX.Element,
+) => JSX.Element;
+
+/**
+ * Properties for all message components.
+ * @alpha Subject to change.
+ */
 export type CustomRoomPreviewBarComponentProps = {
     roomId?: string;
     roomAlias?: string;
@@ -125,6 +150,29 @@ export interface CustomComponentsApi {
         renderer: CustomMessageRenderFunction,
         hints?: CustomMessageRenderHints,
     ): void;
+
+    /**
+     * Register a renderer for the profile component next to a message in the room timeline.
+     *
+     * The render function should return a rendered component.
+     *
+     * @param renderer - The render function.
+     * @throws If another module specifies a render function, this will throw.
+     * @example
+     * ```
+     *  customComponents.registerMessageRenderer("m.room.message", (props, originalComponent) => {
+     *       return <YourCustomComponent mxEvent={props.mxEvent} />;
+     *  });
+     *  customComponents.registerMessageRenderer(
+     *      (mxEvent) => mxEvent.getType().matches(/m\.room\.(topic|name)/) && mxEvent.isState(),
+     *      (props, originalComponent) => {
+     *          return <YourCustomStateRenderer mxEvent={props.mxEvent} />;
+     *      }
+     * );
+     * ```
+     */
+
+    registerMessageProfile(renderer: MessageProfileRenderFunction): void;
 
     /**
      * Register a renderer for the room preview bar.
