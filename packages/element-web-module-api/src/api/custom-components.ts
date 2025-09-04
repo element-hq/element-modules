@@ -7,6 +7,8 @@ Please see LICENSE files in the repository root for full details.
 
 import type { JSX } from "react";
 import type { MatrixEvent } from "../models/event";
+import type { UserInfoRenderFunction } from "./custom-components/userinfo";
+import type { MessageProfileRenderFunction } from "./custom-components/message-profile";
 
 /**
  * Properties for all message components.
@@ -65,31 +67,6 @@ export type CustomMessageRenderFunction = (
      * Render function for the original component. This may be omitted if the message would not normally be rendered.
      */
     originalComponent?: (props?: OriginalMessageComponentProps) => React.JSX.Element,
-) => JSX.Element;
-
-/**
- * Properties for all message components.
- * @alpha Subject to change.
- */
-export type MessageProfileComponentProps = {
-    userId: string;
-    disambiguatedName?: string;
-    avatarUrl: string;
-};
-
-/**
- * Function used to render a message profile
- * @alpha Subject to change.
- */
-export type MessageProfileRenderFunction = (
-    /**
-     * Properties for the message to be renderered.
-     */
-    props: MessageProfileComponentProps,
-    /**
-     * Render function for the original component. This may be omitted if the message would not normally be rendered.
-     */
-    originalComponent?: (props: MessageProfileComponentProps) => React.JSX.Element,
 ) => JSX.Element;
 
 /**
@@ -191,4 +168,6 @@ export interface CustomComponentsApi {
      * ```
      */
     registerRoomPreviewBar(renderer: CustomRoomPreviewBarRenderFunction): void;
+
+    registerUserInfo(renderer: UserInfoRenderFunction): void;
 }
