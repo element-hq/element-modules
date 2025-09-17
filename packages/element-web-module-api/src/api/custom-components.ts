@@ -7,6 +7,8 @@ Please see LICENSE files in the repository root for full details.
 
 import type { JSX } from "react";
 import type { MatrixEvent } from "../models/event";
+import type { UserInfoRenderFunction } from "./custom-components/userinfo";
+import type { MessageProfileRenderFunction } from "./custom-components/message-profile";
 
 /**
  * Properties for all message components.
@@ -127,6 +129,29 @@ export interface CustomComponentsApi {
     ): void;
 
     /**
+     * Register a renderer for the profile component next to a message in the room timeline.
+     *
+     * The render function should return a rendered component.
+     *
+     * @param renderer - The render function.
+     * @throws If another module specifies a render function, this will throw.
+     * @example
+     * ```
+     *  customComponents.registerMessageRenderer("m.room.message", (props, originalComponent) => {
+     *       return <YourCustomComponent mxEvent={props.mxEvent} />;
+     *  });
+     *  customComponents.registerMessageRenderer(
+     *      (mxEvent) => mxEvent.getType().matches(/m\.room\.(topic|name)/) && mxEvent.isState(),
+     *      (props, originalComponent) => {
+     *          return <YourCustomStateRenderer mxEvent={props.mxEvent} />;
+     *      }
+     * );
+     * ```
+     */
+
+    registerMessageProfile(renderer: MessageProfileRenderFunction): void;
+
+    /**
      * Register a renderer for the room preview bar.
      *
      * The render function should return a rendered component.
@@ -143,4 +168,6 @@ export interface CustomComponentsApi {
      * ```
      */
     registerRoomPreviewBar(renderer: CustomRoomPreviewBarRenderFunction): void;
+
+    registerUserInfo(renderer: UserInfoRenderFunction): void;
 }
