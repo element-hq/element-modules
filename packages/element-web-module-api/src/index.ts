@@ -11,6 +11,8 @@ export type { Config, ConfigApi } from "./api/config";
 export type { I18nApi, Variables, Translations } from "./api/i18n";
 export type * from "./models/event";
 export type * from "./api/custom-components";
+export type * from "./api/custom-components/userinfo";
+export type * from "./api/custom-components/message-profile";
 export type * from "./api/legacy-modules";
 export type * from "./api/legacy-customisations";
 export type * from "./api/auth";
