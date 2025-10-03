@@ -35,13 +35,24 @@ export interface AliasCustomisations {
 //
 // @public
 export interface Api extends LegacyModuleApiExtension, LegacyCustomisationsApiExtension, DialogApiExtension, AccountAuthApiExtension, ProfileApiExtension {
+    // @alpha
+    readonly builtins: BuiltinsApi;
     readonly config: ConfigApi;
     createRoot(element: Element): Root;
     // @alpha
     readonly customComponents: CustomComponentsApi;
+    // @alpha
+    readonly extras: ExtrasApi;
     readonly i18n: I18nApi;
+    // Warning: (ae-incompatible-release-tags) The symbol "navigation" is marked as @public, but its signature references "NavigationApi" which is marked as @alpha
     readonly navigation: NavigationApi;
     readonly rootNode: HTMLElement;
+}
+
+// @alpha
+export interface BuiltinsApi {
+    // (undocumented)
+    getRoomViewComponent(): React.ComponentType<RoomViewProps>;
 }
 
 // @alpha @deprecated (undocumented)
@@ -140,6 +151,11 @@ export interface DirectoryCustomisations {
     requireCanonicalAliasAccessToPublish?(): boolean;
 }
 
+// @alpha
+export interface ExtrasApi {
+    setSpacePanelItem(spaceKey: string, props: SpacePanelItemProps): void;
+}
+
 // @public
 export interface I18nApi {
     get language(): string;
@@ -185,6 +201,9 @@ export interface LifecycleCustomisations {
     // (undocumented)
     onLoggedOutAndStorageCleared?(): void;
 }
+
+// @alpha
+export type LocationRenderFunction = () => JSX.Element;
 
 // @alpha
 export interface MatrixEvent {
@@ -270,8 +289,10 @@ export class ModuleLoader {
     start(): Promise<void>;
 }
 
-// @public
+// @alpha
 export interface NavigationApi {
+    // (undocumented)
+    registerLocationRenderer(path: string, renderer: LocationRenderFunction): void;
     toMatrixToLink(link: string, join?: boolean): Promise<void>;
 }
 
@@ -297,8 +318,30 @@ export interface RoomListCustomisations<Room> {
     isRoomVisible?(room: Room): boolean;
 }
 
+// @alpha
+export interface RoomViewProps {
+    // (undocumented)
+    roomId?: string;
+}
+
 // @alpha @deprecated (undocumented)
 export type RuntimeModuleConstructor = new (api: ModuleApi) => RuntimeModule;
+
+// @alpha
+export interface SpacePanelItemProps {
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    contextMenuTooltip?: string;
+    // (undocumented)
+    icon?: JSX.Element;
+    // (undocumented)
+    label: string;
+    // (undocumented)
+    onSelected?(): void;
+    // (undocumented)
+    style?: React.CSSProperties;
+}
 
 // @public
 export type Translations = Record<string, {
