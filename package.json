@@ -29,7 +29,7 @@
         "@element-hq/element-web-module-api": "*",
         "@element-hq/element-web-playwright-common": "*",
         "@playwright/test": "^1.52.0",
-        "@stylistic/eslint-plugin": "^3.0.0",
+        "@stylistic/eslint-plugin": "^5.0.0",
         "@types/node": "^22.12.0",
         "@typescript-eslint/eslint-plugin": "^8.22.0",
         "@typescript-eslint/parser": "^8.22.0",
