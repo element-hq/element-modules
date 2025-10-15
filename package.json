@@ -42,7 +42,7 @@
         "eslint-plugin-matrix-org": "^2.0.2",
         "eslint-plugin-react": "^7.37.4",
         "eslint-plugin-react-compiler": "^19.0.0-beta-27714ef-20250124",
-        "eslint-plugin-react-hooks": "^5.1.0",
+        "eslint-plugin-react-hooks": "^7.0.0",
         "eslint-plugin-unicorn": "^56.0.0",
         "glob": "^11.0.1",
         "husky": "^9.1.7",
