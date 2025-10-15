@@ -78,8 +78,11 @@ export interface ConfigApi {
 
 // @alpha
 export interface CustomComponentsApi {
+    registerMessageProfile(renderer: MessageProfileRenderFunction): void;
     registerMessageRenderer(eventTypeOrFilter: string | ((mxEvent: MatrixEvent) => boolean), renderer: CustomMessageRenderFunction, hints?: CustomMessageRenderHints): void;
     registerRoomPreviewBar(renderer: CustomRoomPreviewBarRenderFunction): void;
+    // (undocumented)
+    registerUserInfo(renderer: UserInfoRenderFunction): void;
 }
 
 // @alpha
@@ -238,6 +241,18 @@ export interface MediaCustomisations<Content, Client, PreparedMedia> {
     mediaFromMxc(mxc?: string, client?: Client): Media;
 }
 
+// @alpha
+export type MessageProfileComponentProps = {
+    mxEvent: MatrixEvent;
+    onClick?: () => void;
+    member?: MemberInfo;
+};
+
+// @alpha
+export type MessageProfileRenderFunction = (
+props: MessageProfileComponentProps,
+originalComponent: (props: MessageProfileComponentProps) => React.JSX.Element) => JSX.Element;
+
 // @public
 export interface Module {
     // (undocumented)
@@ -313,6 +328,16 @@ export interface UserIdentifierCustomisations {
     }): string | null;
 }
 
+// @alpha
+export type UserInfoComponentProps = {
+    userId: string;
+};
+
+// @alpha
+export type UserInfoRenderFunction = (
+props: UserInfoComponentProps,
+originalComponent: (props: UserInfoComponentProps) => React.JSX.Element) => JSX.Element;
+
 // @public
 export function useWatchable<T>(watchable: Watchable<T>): T;
 
@@ -353,6 +378,10 @@ export interface WidgetVariablesCustomisations {
         baseUrl?: string;
     };
 }
+
+// Warnings were encountered during analysis:
+//
+// src/api/custom-components/message-profile.ts:19:5 - (ae-forgotten-export) The symbol "MemberInfo" needs to be exported by the entry point index.d.ts
 
 // (No @packageDocumentation comment for this package)
 
