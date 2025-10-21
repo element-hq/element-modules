@@ -6,17 +6,6 @@ Please see LICENSE files in the repository root for full details.
 */
 
 /**
- * The props that must be passed to a RoomView component.
- * @alpha Subject to change.
- */
-export interface RoomViewProps {
-    /**
-     * The ID of the room to render.
-     */
-    roomId?: string;
-}
-
-/**
  * Exposes components and classes that are part of Element Web to allow modules to
  * render the components as part of their custom components or use the classes
  * (because they can't import the components from Element Web since it would cause
@@ -25,11 +14,19 @@ export interface RoomViewProps {
  */
 export interface BuiltinsApi {
     /**
-     * Returns the RoomView component used by Element Web to render a room such that
-     * modules can render it as part of their own custom room views.
+     * Render room avatar component from element-web.
      *
      * @alpha
-     * @returns The RoomView component.
+     * @param roomId - Id of the room
+     * @param size - Size of the avatar to render
      */
-    getRoomViewComponent(): React.ComponentType<RoomViewProps>;
+    renderRoomAvatar(roomId: string, size?: string): React.ReactNode;
+
+    /**
+     * Render room view component from element-web.
+     *
+     * @alpha
+     * @param roomId - Id of the room
+     */
+    renderRoomView(roomId: string): React.ReactNode;
 }
