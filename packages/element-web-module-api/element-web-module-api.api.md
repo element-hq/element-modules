@@ -24,6 +24,11 @@ export interface AccountAuthInfo {
     userId: string;
 }
 
+// @public
+export interface ActionsApi {
+    openRoom: (roomId: string) => void;
+}
+
 // @alpha @deprecated (undocumented)
 export interface AliasCustomisations {
     // (undocumented)
@@ -35,6 +40,7 @@ export interface AliasCustomisations {
 //
 // @public
 export interface Api extends LegacyModuleApiExtension, LegacyCustomisationsApiExtension, DialogApiExtension, AccountAuthApiExtension, ProfileApiExtension {
+    readonly actions: ActionsApi;
     // @alpha
     readonly builtins: BuiltinsApi;
     readonly config: ConfigApi;
