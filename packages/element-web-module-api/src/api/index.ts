@@ -17,6 +17,7 @@ import { AccountAuthApiExtension } from "./auth.ts";
 import { ProfileApiExtension } from "./profile.ts";
 import { ExtrasApi } from "./extras.ts";
 import { BuiltinsApi } from "./builtins.ts";
+import { ActionsApi } from "./actions.ts";
 
 /**
  * Module interface for modules to implement.
@@ -122,6 +123,11 @@ export interface Api
      * @alpha
      */
     readonly extras: ExtrasApi;
+
+    /**
+     * Exposes certain predefined actions that can be performed on Element Web.
+     */
+    readonly actions: ActionsApi;
 
     /**
      * Create a ReactDOM root for rendering React components.
