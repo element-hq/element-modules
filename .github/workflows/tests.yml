@@ -35,7 +35,7 @@ jobs:
               run: sed -ie 's/filename="/filename="modules\/restricted-guests\/synapse\//' modules/restricted-guests/synapse/coverage.xml
 
             - name: Upload Artifact
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
               with:
                   name: coverage
                   path: |
