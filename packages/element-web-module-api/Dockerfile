@@ -1,6 +1,6 @@
-ARG ELEMENT_VERSION=latest
+ARG ELEMENT_VERSION=latest@sha256:6e91e641abe70dd02f1461b4f1ebf8f6807bfa381ec7f2c13e9e286c4e2b2918
 
-FROM --platform=$BUILDPLATFORM node:lts-alpine AS builder
+FROM --platform=$BUILDPLATFORM node:lts-alpine@sha256:f36fed0b2129a8492535e2853c64fbdbd2d29dc1219ee3217023ca48aebd3787 AS builder
 
 ARG BUILD_CONTEXT
 
