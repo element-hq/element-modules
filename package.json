@@ -39,7 +39,7 @@
         "eslint-plugin-deprecate": "^0.8.5",
         "eslint-plugin-import": "^2.25.4",
         "eslint-plugin-jsx-a11y": "^6.10.2",
-        "eslint-plugin-matrix-org": "^2.0.2",
+        "eslint-plugin-matrix-org": "^3.0.0",
         "eslint-plugin-react": "^7.37.4",
         "eslint-plugin-react-compiler": "^19.0.0-beta-27714ef-20250124",
         "eslint-plugin-react-hooks": "^7.0.0",
