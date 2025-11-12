@@ -7196,10 +7196,10 @@ vite@^7.1.11:
   optionalDependencies:
     fsevents "~2.3.3"
 
-vitest-sonar-reporter@^2.0.0:
-  version "2.0.0"
-  resolved "https://registry.yarnpkg.com/vitest-sonar-reporter/-/vitest-sonar-reporter-2.0.0.tgz#6372e5faba2b2834eac0b2cd1283263d38d0e718"
-  integrity sha512-LorC3NnmrBrryx4+l3BEsNQjD0Y7wfmrD1y/+tHDuZUuVj7w8nOxRXCBSppDfmgfpToOhwchh0JcL4IGMKUKDA==
+vitest-sonar-reporter@^3.0.0:
+  version "3.0.0"
+  resolved "https://registry.yarnpkg.com/vitest-sonar-reporter/-/vitest-sonar-reporter-3.0.0.tgz#3bb34a9a46390dce83a50de16135fc325c73359d"
+  integrity sha512-QRT5m9Z/3Kt0WVDVcFHm5LC9Ba89yDP4twlX2QUAJ9PdqfJBkLAh/kXj7m6U3i0k6GxnIEiwCc295bmAYokmZg==
 
 vitest@^4.0.0:
   version "4.0.8"
