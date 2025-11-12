@@ -3730,10 +3730,10 @@ eslint-plugin-jsx-a11y@^6.10.2:
     safe-regex-test "^1.0.3"
     string.prototype.includes "^2.0.1"
 
-eslint-plugin-matrix-org@^2.0.2:
-  version "2.0.2"
-  resolved "https://registry.yarnpkg.com/eslint-plugin-matrix-org/-/eslint-plugin-matrix-org-2.0.2.tgz#95b86b0f16704ab19740f7c3c62eae69e20365e6"
-  integrity sha512-cQy5Rjeq6uyu1mLXlPZwEJdyM0NmclrnEz68y792FSuuxzMyJNNYLGDQ5CkYW8H+PrD825HUFZ34pNXnjMOzOw==
+eslint-plugin-matrix-org@^3.0.0:
+  version "3.0.0"
+  resolved "https://registry.yarnpkg.com/eslint-plugin-matrix-org/-/eslint-plugin-matrix-org-3.0.0.tgz#0e5eaa556b6780dcd616b1381baec252df78b56d"
+  integrity sha512-xOPMeyLxOgoB2SsPhJmIc+drorZmXozSBo3X9whk/62DvbVpJcnththOCGx8ljYScADLb+baNOeN+wKZqwkldw==
 
 eslint-plugin-react-compiler@^19.0.0-beta-27714ef-20250124:
   version "19.0.0-beta-27714ef-20250124"
