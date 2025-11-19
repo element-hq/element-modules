@@ -17,7 +17,7 @@ jobs:
         env:
             DOCKER_IMAGE: ghcr.io/element-hq/synapse-guest-module
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
             - name: Login to ghcr.io
               uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3
