@@ -56,4 +56,11 @@ export interface ExtrasApi {
      * @param props - Properties of the item to add.
      */
     setSpacePanelItem(spaceKey: string, props: SpacePanelItemProps): void;
+
+    /**
+     * Sets the list of room IDs associated with a given space.
+     * @param spaceKey - A key to identify this space-like item.
+     * @param roomIDs - The list of room IDs to associate with this space.
+     */
+    setRoomIdsForSpace(spaceKey: string, roomIDs: string[]): void;
 }
