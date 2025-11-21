@@ -358,6 +358,7 @@ export interface RoomViewProps {
     hideComposer?: boolean;
     // (undocumented)
     hideHeader?: boolean;
+    hidePinnedMessageBanner?: boolean;
     // (undocumented)
     hideRightPanel?: boolean;
 }

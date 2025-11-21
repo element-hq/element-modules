@@ -22,6 +22,10 @@ export interface RoomViewProps {
      * If true, the right panel will be hidden.
      */
     hideRightPanel?: boolean;
+    /**
+     * If true, the pinned message banner will be hidden.
+     */
+    hidePinnedMessageBanner?: boolean;
 }
 
 /**
