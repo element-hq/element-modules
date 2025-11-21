@@ -58,9 +58,13 @@ export interface ExtrasApi {
     setSpacePanelItem(spaceKey: string, props: SpacePanelItemProps): void;
 
     /**
-     * Sets the list of room IDs associated with a given space.
-     * @param spaceKey - A key to identify this space-like item.
-     * @param roomIDs - The list of room IDs to associate with this space.
+     * Registers a callback to get the list of visible rooms for a given space.
+     *
+     * Element Web will call this callback when checking if a room is displayed for the given space. For example in case of message editing or replying.
+     * If the space added by the module displays a room view and doesn't provide this callback, Element Web won't be able to determine if a room is visible in that space and will redirect to display the room in its vanilla space/metaspace.
+     *
+     * @param spaceKey - The space key to get visible rooms for.
+     * @param cb - A callback that returns the list of visible room IDs.
      */
-    setRoomIdsForSpace(spaceKey: string, roomIDs: string[]): void;
+    getVisibleRoomBySpaceKey(spaceKey: string, cb: () => string[]): void;
 }
