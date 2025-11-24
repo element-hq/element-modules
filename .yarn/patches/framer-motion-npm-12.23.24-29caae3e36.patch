@@ -1,0 +1,13 @@
+diff --git a/dist/types/index.d.ts b/dist/types/index.d.ts
+index 8c9b53a60026e020aee597304c8b081e3d447344..3dbd7578fdf5aba3be43dc3dcbd377c4d51a46a6 100644
+--- a/dist/types/index.d.ts
++++ b/dist/types/index.d.ts
+@@ -4,7 +4,7 @@ import { AnyResolvedKeyframe, OnKeyframesResolved, KeyframeResolver, UnresolvedV
+ export * from 'motion-dom';
+ import * as react_jsx_runtime from 'react/jsx-runtime';
+ import * as React$1 from 'react';
+-import { useEffect, RefObject } from 'react';
++import { JSX, useEffect, RefObject } from 'react';
+ import { V as VariantLabels, a as VisualElement, M as MotionProps, C as CreateVisualElement, b as MotionConfigContext, H as HTMLElements, c as HTMLMotionProps, D as DOMMotionComponents, d as HTMLMotionComponents, S as SVGMotionComponents, e as VisualElementAnimationOptions, I as IProjectionNode, R as ResolvedValues, f as HTMLRenderState } from '../types.d-BJcRxCew.js';
+ export { A as AnimationType, p as FlatTree, F as ForwardRefComponent, j as MotionStyle, k as MotionTransform, P as PresenceContext, l as SVGAttributesAsMotionValues, n as SVGMotionProps, g as ScrapeMotionValuesFromProps, i as SwitchLayoutGroupContext, h as VisualState, m as makeUseVisualState, o as optimizedAppearDataAttribute } from '../types.d-BJcRxCew.js';
+ import { Easing, EasingFunction, Point, Axis, Box } from 'motion-utils';
