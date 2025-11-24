@@ -6,7 +6,6 @@
     "author": "New Vector Ltd.",
     "license": "SEE LICENSE IN README.md",
     "scripts": {
-        "prepare": "echo \"Nothing to prepare\"",
         "clean": "echo \"Nothing to clean\"",
         "build": "echo \"Nothing to build\"",
         "docker:build": "docker build -t element-hq/synapse-guest-module -f Dockerfile .",

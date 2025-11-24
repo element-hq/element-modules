@@ -40,6 +40,8 @@ jobs:
 
             - name: Install Deps
               run: "yarn install --frozen-lockfile"
+              env:
+                  YARN_ENABLE_HARDENED_MODE: 0
 
             - name: Run check
               run: "yarn run ${{ matrix.cmd }}"

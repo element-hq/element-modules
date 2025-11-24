@@ -6,7 +6,8 @@
     "main": "lib/index.js",
     "license": "SEE LICENSE IN README.md",
     "scripts": {
-        "prepare": "vite build",
+        "prepack": "vite build",
+        "postinstall": "yarn run prepack",
         "lint:types": "tsc --noEmit",
         "lint:codestyle": "echo 'handled by lint:eslint'",
         "test": "echo no tests yet"
