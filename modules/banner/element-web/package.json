@@ -6,7 +6,8 @@
     "main": "lib/index.js",
     "license": "SEE LICENSE IN README.md",
     "scripts": {
-        "prepare": "vite build",
+        "prepack": "vite build",
+        "postinstall": "yarn run prepack",
         "lint:types": "tsc --noEmit",
         "lint:codestyle": "echo 'handled by lint:eslint'",
         "test": "echo no tests yet"
@@ -20,14 +21,14 @@
         "rollup-plugin-external-globals": "^0.13.0",
         "typescript": "^5.7.3",
         "vite": "^7.1.11",
-        "vite-plugin-node-polyfills": "^0.23.0",
+        "vite-plugin-node-polyfills": "^0.24.0",
         "vite-plugin-svgr": "^4.3.0"
     },
     "dependencies": {
         "@radix-ui/react-dialog": "^1.1.6",
         "@vector-im/compound-design-tokens": "^6.0.0",
         "@vector-im/compound-web": "^8.0.0",
-        "framer-motion": "^12.4.10",
+        "framer-motion": "patch:framer-motion@npm%3A12.23.24#~/.yarn/patches/framer-motion-npm-12.23.24-29caae3e36.patch",
         "styled-components": "^6.1.18",
         "zod": "^4.0.0"
     }

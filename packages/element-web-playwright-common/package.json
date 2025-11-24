@@ -18,7 +18,8 @@
         "playwright-screenshots": "playwright-screenshots.sh"
     },
     "scripts": {
-        "prepare": "tsc",
+        "prepack": "tsc",
+        "postinstall": "yarn run prepack",
         "lint:types": "tsc --noEmit",
         "lint:codestyle": "echo 'handled by lint:eslint'",
         "test": "echo No tests for @element-hq/element-web-playwright-common"

@@ -7,12 +7,13 @@ ARG BUILD_CONTEXT
 RUN apk add --no-cache jq
 
 WORKDIR /app
-COPY package.json yarn.lock ./
+COPY package.json yarn.lock .yarnrc.yml ./
+COPY .yarn ./.yarn
 # Copy the package.json files of all modules & packages to ensure the frozen workspace lockfile holds up
 RUN --mount=type=bind,target=/docker-context \
     cd /docker-context/; \
     find . -path ./node_modules -prune -o -name "package.json" -mindepth 0 -maxdepth 4 -exec cp --parents "{}" /app/ \;
-RUN yarn install --frozen-lockfile --ignore-scripts
+RUN corepack enable && yarn install --frozen-lockfile --mode=skip-build
 COPY tsconfig.json ./
 COPY ./$BUILD_CONTEXT ./$BUILD_CONTEXT
 RUN cd $BUILD_CONTEXT && yarn vite build

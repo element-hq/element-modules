@@ -25,7 +25,8 @@
         "lib"
     ],
     "scripts": {
-        "prepare": "vite build && api-extractor run",
+        "prepack": "vite build && api-extractor run",
+        "postinstall": "yarn run prepack",
         "lint:types": "tsc --noEmit",
         "lint:codestyle": "echo 'handled by lint:eslint'",
         "test": "vitest --coverage"

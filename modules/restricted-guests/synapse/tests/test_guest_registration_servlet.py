@@ -23,7 +23,7 @@ class GuestUserReaperTest(aiounittest.AsyncTestCase):
         module, _, _ = create_module()
 
         request = cast(Request, DummyRequest([]))
-        request.content = io.BytesIO(b"{}")
+        request.content = io.BytesIO(b"{}")  # type: ignore
 
         status, response = await module.registration_servlet._async_render_POST(request)
 
@@ -36,7 +36,7 @@ class GuestUserReaperTest(aiounittest.AsyncTestCase):
         module, _, _ = create_module()
 
         request = cast(Request, DummyRequest([]))
-        request.content = io.BytesIO(b'{"displayname":"  "}')
+        request.content = io.BytesIO(b'{"displayname":"  "}')  # type: ignore
 
         status, response = await module.registration_servlet._async_render_POST(request)
 
@@ -49,7 +49,7 @@ class GuestUserReaperTest(aiounittest.AsyncTestCase):
         module, module_api, _ = create_module()
 
         request = cast(Request, DummyRequest([]))
-        request.content = io.BytesIO(b'{"displayname":"My Name"}')
+        request.content = io.BytesIO(b'{"displayname":"My Name"}')  # type: ignore
 
         module_api.check_user_exists.return_value = make_awaitable(True)
 
@@ -66,7 +66,7 @@ class GuestUserReaperTest(aiounittest.AsyncTestCase):
         module, module_api, _ = create_module()
 
         request = cast(Request, DummyRequest([]))
-        request.content = io.BytesIO(b'{"displayname":"My Name "}')
+        request.content = io.BytesIO(b'{"displayname":"My Name "}')  # type: ignore
 
         status, response = await module.registration_servlet._async_render_POST(request)
 
