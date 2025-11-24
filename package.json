@@ -14,14 +14,14 @@
         "lint:prettier": "prettier --check .",
         "lint:prettier:fix": "prettier --write .",
         "lint:eslint": "eslint --max-warnings 0 modules/*/element-web/src packages/*/src",
-        "lint:types": "yarn workspaces run lint:types",
-        "lint:codestyle": "yarn workspaces run lint:codestyle",
+        "lint:types": "yarn workspaces foreach -A run lint:types",
+        "lint:codestyle": "yarn workspaces foreach -A run lint:codestyle",
         "lint:knip": "knip",
-        "test": "yarn workspaces run test",
+        "test": "yarn workspaces foreach -A run test",
         "test:playwright": "playwright test",
         "test:playwright:open": "yarn test:playwright --ui",
         "test:playwright:screenshots": "playwright-screenshots",
-        "prepare": "husky && yarn workspaces run prepare"
+        "prepare": "husky && yarn workspaces foreach -A run prepare"
     },
     "devDependencies": {
         "@action-validator/cli": "^0.6.0",
@@ -51,5 +51,5 @@
         "prettier": "^3.4.2",
         "typescript": "^5.7.3"
     },
-    "packageManager": "yarn@1.22.22"
+    "packageManager": "yarn@4.12.0"
 }
