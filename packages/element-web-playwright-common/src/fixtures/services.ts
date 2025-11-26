@@ -152,7 +152,7 @@ export const test = base.extend<TestFixtures, WorkerOptions & Services>({
         { scope: "worker" },
     ],
     homeserver: [
-        async ({ logger, network, _homeserver: homeserver, synapseConfig, mas }, use) => {
+        async ({ request, logger, network, _homeserver: homeserver, synapseConfig, mas }, use) => {
             if (homeserver instanceof SynapseContainer) {
                 homeserver.withConfig(synapseConfig);
             }
@@ -162,6 +162,7 @@ export const test = base.extend<TestFixtures, WorkerOptions & Services>({
                 .withLogConsumer(logger.getConsumer("homeserver"))
                 .withMatrixAuthenticationService(mas)
                 .start();
+            container.setRequest(request);
 
             await use(container);
             await container.stop();
@@ -179,7 +180,6 @@ export const test = base.extend<TestFixtures, WorkerOptions & Services>({
     ],
 
     context: async ({ logger, context, request, homeserver }, use, testInfo) => {
-        homeserver.setRequest(request);
         await logger.onTestStarted(context);
         await use(context);
         await logger.onTestFinished(testInfo);
