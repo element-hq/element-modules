@@ -10,6 +10,8 @@ import AxeBuilder from "@axe-core/playwright";
 
 import { test as base } from "./user";
 
+// We want to avoid using `mergeTests` because it drops useful type information about the fixtures. Instead, we extend
+// the definition of `test` from `user.ts`, so that there is a linear hierarchy.
 export const test = base.extend<{
     /**
      * AxeBuilder instance for the current page
