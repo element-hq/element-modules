@@ -21,7 +21,7 @@
         "test:playwright": "playwright test",
         "test:playwright:open": "yarn test:playwright --ui",
         "test:playwright:screenshots": "playwright-screenshots",
-        "prepare": "husky && yarn workspaces run prepare"
+        "prepare": "patch-package && husky && yarn workspaces run prepare"
     },
     "devDependencies": {
         "@action-validator/cli": "^0.6.0",
@@ -48,6 +48,7 @@
         "husky": "^9.1.7",
         "knip": "^5.43.5",
         "lint-staged": "^16.0.0",
+        "patch-package": "^8.0.1",
         "prettier": "^3.4.2",
         "typescript": "^5.7.3"
     },
