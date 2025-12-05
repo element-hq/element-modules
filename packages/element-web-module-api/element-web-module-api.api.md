@@ -381,7 +381,7 @@ export interface StoresApi {
 }
 
 // @public
-export type Translations = Record<string, {
+export type Translations = Record<TranslationKey, {
     [ietfLanguageTag: string]: string;
 }>;
 
