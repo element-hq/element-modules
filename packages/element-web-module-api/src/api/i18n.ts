@@ -5,12 +5,25 @@ SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
 Please see LICENSE files in the repository root for full details.
 */
 
+declare global {
+    // Declare this in the global scope so that it can be overridden with the
+    // project's translation keys when used. Ideally, this 'never' declaration
+    // would be the default such that any calls would be a type error unless
+    // the project provided an override. Unfortunately, vite-plugin-dts doesn't
+    // output this declaration into the .d.ts file so TranslationKey is just left
+    // as an undefined type which somehow Typescript considers to be totally fine.
+    // https://github.com/qmhc/unplugin-dts/issues/419 is a bug about these declarations
+    // not being output as of version 4.5.1, but at time of writing we use 4.5.0 and
+    // it still doesn't appear.
+    type TranslationKey = never;
+}
+
 /**
  * The translations for the module.
  * @public
  */
 export type Translations = Record<
-    string,
+    TranslationKey,
     {
         [ietfLanguageTag: string]: string;
     }
