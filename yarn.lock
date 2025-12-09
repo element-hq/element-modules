@@ -1733,11 +1733,11 @@
     svg-parser "^2.0.4"
 
 "@testcontainers/postgresql@^11.0.0":
-  version "11.8.1"
-  resolved "https://registry.yarnpkg.com/@testcontainers/postgresql/-/postgresql-11.8.1.tgz#3a70c02cacac7480dd55f16b52e3b46c948f41cd"
-  integrity sha512-uPTFk9IY5v9Dm6HcVTOSvZQQ+HrdGiwDk+/LDG+v67yD81kgBlYpH730JJhZoO72d1pJHKwTAJ+5WPOvecl1pw==
+  version "11.9.0"
+  resolved "https://registry.yarnpkg.com/@testcontainers/postgresql/-/postgresql-11.9.0.tgz#9009e28208c4134c4cd6614827fa98614ea1d494"
+  integrity sha512-beLyLdLygFllktviM132Xd6tQ4i5FnuyZP+4BQEjUb5sJYHYnIrV/ZBzRRflIlF8gugt1GXgudkmr/HxM9vtKw==
   dependencies:
-    testcontainers "^11.8.1"
+    testcontainers "^11.9.0"
 
 "@types/argparse@1.0.38":
   version "1.0.38"
@@ -1797,10 +1797,10 @@
     "@types/node" "*"
     "@types/ssh2" "*"
 
-"@types/dockerode@^3.3.45":
-  version "3.3.45"
-  resolved "https://registry.yarnpkg.com/@types/dockerode/-/dockerode-3.3.45.tgz#1b5f19301563acf811adc13a6b2b3e0981998a5e"
-  integrity sha512-iYpZF+xr5QLpIICejLdUF2r5gh8IXY1Gw3WLmt41dUbS3Vn/3hVgL+6lJBVbmrhYBWfbWPPstdr6+A0s95DTWA==
+"@types/dockerode@^3.3.47":
+  version "3.3.47"
+  resolved "https://registry.yarnpkg.com/@types/dockerode/-/dockerode-3.3.47.tgz#cf8c6b4efcd0bb28b0e6009e613e7faab1b96e75"
+  integrity sha512-ShM1mz7rCjdssXt7Xz0u1/R2BJC7piWa3SJpUBiVjCf2A3XNn4cP6pUVaD8bLanpPVVn4IKzJuw3dOvkJ8IbYw==
   dependencies:
     "@types/docker-modem" "*"
     "@types/node" "*"
@@ -6922,13 +6922,13 @@ tar-stream@^3.0.0, tar-stream@^3.1.5:
     fast-fifo "^1.2.0"
     streamx "^2.15.0"
 
-testcontainers@^11.0.0, testcontainers@^11.8.1:
-  version "11.8.1"
-  resolved "https://registry.yarnpkg.com/testcontainers/-/testcontainers-11.8.1.tgz#e15cf440e5b6c10ddf85dd3ab59a7c3cca855981"
-  integrity sha512-XeqoHbgVA8lx9ufrgYIKlYV4eubVCn3CL6Dh7sdHT793/hbDu/S7N786MqBxQZjzDG+YRKFSCNPTEwp8lREY9Q==
+testcontainers@^11.0.0, testcontainers@^11.9.0:
+  version "11.9.0"
+  resolved "https://registry.yarnpkg.com/testcontainers/-/testcontainers-11.9.0.tgz#464c2feb31b56ef594563349048efeaf0af2bd1e"
+  integrity sha512-SQ6OqQUig7HcGVF72i+ZVIMvxPSpEz8cgC/B63ekqMzgf98DnveoBbOmqux/Wa5wQAQCt4mEPNMa/Jz7vMg9fQ==
   dependencies:
     "@balena/dockerignore" "^1.0.2"
-    "@types/dockerode" "^3.3.45"
+    "@types/dockerode" "^3.3.47"
     archiver "^7.0.1"
     async-lock "^1.4.1"
     byline "^5.0.0"
