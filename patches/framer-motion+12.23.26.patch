@@ -1,0 +1,36 @@
+diff --git a/node_modules/framer-motion/dist/types.d-DagZKalS.d.ts b/node_modules/framer-motion/dist/types.d-DagZKalS.d.ts
+index 3168528..ac350c2 100644
+--- a/node_modules/framer-motion/dist/types.d-DagZKalS.d.ts
++++ b/node_modules/framer-motion/dist/types.d-DagZKalS.d.ts
+@@ -30,8 +30,7 @@ type MotionSVGProps = MakeMotion<SVGPathProperties>;
+ /**
+  * @public
+  */
+-interface MotionStyle extends MotionCSS, MotionTransform, MotionSVGProps {
+-}
++type MotionStyle = MotionCSS & MotionTransform & MotionSVGProps;
+ /**
+  * Props for `motion` components.
+  *
+diff --git a/node_modules/framer-motion/dist/types/index.d.ts b/node_modules/framer-motion/dist/types/index.d.ts
+index 09c05cc..624f927 100644
+--- a/node_modules/framer-motion/dist/types/index.d.ts
++++ b/node_modules/framer-motion/dist/types/index.d.ts
+@@ -512,7 +512,7 @@ interface Props$1<V, TagName extends ReorderElementTag = DefaultGroupElement> {
+     values: V[];
+ }
+ type ReorderGroupProps<V, TagName extends ReorderElementTag = DefaultGroupElement> = Props$1<V, TagName> & Omit<HTMLMotionProps<TagName>, "values"> & React$1.PropsWithChildren<{}>;
+-declare function ReorderGroupComponent<V, TagName extends ReorderElementTag = DefaultGroupElement>({ children, as, axis, onReorder, values, ...props }: ReorderGroupProps<V, TagName>, externalRef?: React$1.ForwardedRef<any>): JSX.Element;
++declare function ReorderGroupComponent<V, TagName extends ReorderElementTag = DefaultGroupElement>({ children, as, axis, onReorder, values, ...props }: ReorderGroupProps<V, TagName>, externalRef?: React$1.ForwardedRef<any>): react_jsx_runtime.JSX.Element;
+ declare const ReorderGroup: <V, TagName extends keyof HTMLElements = "ul">(props: ReorderGroupProps<V, TagName> & {
+     ref?: React$1.ForwardedRef<any>;
+ }) => ReturnType<typeof ReorderGroupComponent>;
+@@ -539,7 +539,7 @@ interface Props<V, TagName extends ReorderElementTag = DefaultItemElement> {
+     layout?: true | "position";
+ }
+ type ReorderItemProps<V, TagName extends ReorderElementTag = DefaultItemElement> = Props<V, TagName> & Omit<HTMLMotionProps<TagName>, "value" | "layout"> & React$1.PropsWithChildren<{}>;
+-declare function ReorderItemComponent<V, TagName extends ReorderElementTag = DefaultItemElement>({ children, style, value, as, onDrag, layout, ...props }: ReorderItemProps<V, TagName>, externalRef?: React$1.ForwardedRef<any>): JSX.Element;
++declare function ReorderItemComponent<V, TagName extends ReorderElementTag = DefaultItemElement>({ children, style, value, as, onDrag, layout, ...props }: ReorderItemProps<V, TagName>, externalRef?: React$1.ForwardedRef<any>): react_jsx_runtime.JSX.Element;
+ declare const ReorderItem: <V, TagName extends keyof HTMLElements = "li">(props: ReorderItemProps<V, TagName> & {
+     ref?: React$1.ForwardedRef<any>;
+ }) => ReturnType<typeof ReorderItemComponent>;
