@@ -38,6 +38,8 @@ esac
 RUN_ARGS=(
   --rm
   --network host
+  # For Linux systems this is needed to expose host.docker.internal (https://docs.docker.com/reference/cli/dockerd/#configure-host-gateway-ip)
+  --add-host=host.docker.internal:<host-gateway>
   # Pass BASE_URL and CI environment variables to the container
   -e BASE_URL
   -e CI
