@@ -9,6 +9,9 @@ on:
 jobs:
     build-py:
         name: Build Python
+        permissions:
+            contents: read
+            packages: write
         runs-on: ubuntu-latest
         timeout-minutes: 15
         defaults:
