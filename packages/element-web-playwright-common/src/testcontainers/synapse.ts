@@ -170,7 +170,15 @@ const DEFAULT_CONFIG = {
               room_name: string;
           },
     allow_guest_access: false,
-    experimental_features: {},
+    experimental_features: {
+        /**
+         * MSC4143 Matrix RTC: Required for `matrix_rtc` configuration.
+         */
+        msc4143_enabled: false,
+    },
+    matrix_rtc: {
+        transports: Array<{ type: string; [field: string]: string }>,
+    },
     oidc_providers: [],
     serve_server_wellknown: true,
     presence: {
