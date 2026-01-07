@@ -59,6 +59,7 @@ export interface Api extends LegacyModuleApiExtension, LegacyCustomisationsApiEx
 
 // @alpha
 export interface BuiltinsApi {
+    renderNotificationDecoration(roomId: string): React.ReactNode;
     renderRoomAvatar(roomId: string, size?: string): React.ReactNode;
     renderRoomView(roomId: string, props?: RoomViewProps): React.ReactNode;
 }
@@ -356,10 +357,12 @@ export interface RoomListStoreApi {
 
 // @alpha
 export interface RoomViewProps {
+    enableReadReceiptsAndMarkersOnActivity?: boolean;
     hideComposer?: boolean;
     hideHeader?: boolean;
     hidePinnedMessageBanner?: boolean;
     hideRightPanel?: boolean;
+    hideWidgets?: boolean;
 }
 
 // @alpha @deprecated (undocumented)
