@@ -6,15 +6,19 @@ Please see LICENSE files in the repository root for full details.
 */
 
 import type { Root } from "react-dom/client";
-import { LegacyModuleApiExtension } from "./legacy-modules";
-import { LegacyCustomisationsApiExtension } from "./legacy-customisations";
-import { ConfigApi } from "./config";
-import { I18nApi } from "./i18n";
-import { CustomComponentsApi } from "./custom-components";
-import { NavigationApi } from "./navigation.ts";
-import { DialogApiExtension } from "./dialog.ts";
-import { AccountAuthApiExtension } from "./auth.ts";
-import { ProfileApiExtension } from "./profile.ts";
+import { type LegacyModuleApiExtension } from "./legacy-modules";
+import { type LegacyCustomisationsApiExtension } from "./legacy-customisations";
+import { type ConfigApi } from "./config";
+import { type I18nApi } from "./i18n";
+import { type CustomComponentsApi } from "./custom-components";
+import { type NavigationApi } from "./navigation.ts";
+import { type DialogApiExtension } from "./dialog.ts";
+import { type AccountAuthApiExtension } from "./auth.ts";
+import { type ProfileApiExtension } from "./profile.ts";
+import { type ExtrasApi } from "./extras.ts";
+import { type BuiltinsApi } from "./builtins.ts";
+import { type StoresApi } from "./stores.ts";
+import { type ClientApi } from "./client.ts";
 
 /**
  * Module interface for modules to implement.
@@ -74,7 +78,8 @@ export function isModule(module: unknown): module is ModuleExport {
  * @public
  */
 export interface Api
-    extends LegacyModuleApiExtension,
+    extends
+        LegacyModuleApiExtension,
         LegacyCustomisationsApiExtension,
         DialogApiExtension,
         AccountAuthApiExtension,
@@ -104,10 +109,32 @@ export interface Api
     readonly customComponents: CustomComponentsApi;
 
     /**
+     * Allows modules to render components that are part of Element Web.
+     * @alpha
+     */
+    readonly builtins: BuiltinsApi;
+
+    /**
      * API to navigate the application.
      * @public
      */
     readonly navigation: NavigationApi;
+
+    /**
+     * Allows modules to insert extra UI into Element Web.
+     * @alpha
+     */
+    readonly extras: ExtrasApi;
+
+    /**
+     * Allows modules to access a limited functionality of certain stores from Element Web.
+     */
+    readonly stores: StoresApi;
+
+    /**
+     * Access some very specific functionality from the client.
+     */
+    readonly client: ClientApi;
 
     /**
      * Create a ReactDOM root for rendering React components.

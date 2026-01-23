@@ -5,13 +5,13 @@ SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
 Please see LICENSE files in the repository root for full details.
 */
 
-import { FC, type JSX } from "react";
+import { type FC, type JSX } from "react";
 import { Button } from "@vector-im/compound-web";
 import { type Api } from "@element-hq/element-web-module-api";
 import styled from "styled-components";
 import { useWatchable } from "@element-hq/element-web-module-api";
 
-import { ModuleConfig } from "./config.ts";
+import { type ModuleConfig } from "./config.ts";
 import RegisterDialog from "./RegisterDialog.tsx";
 
 interface RoomPreviewBarProps {
@@ -25,6 +25,9 @@ interface RoomPreviewBarProps {
 
 const Container = styled.aside`
     margin: auto;
+    font: var(--cpd-font-body-md-regular);
+    letter-spacing: var(--cpd-font-letter-spacing-body-md);
+    font-feature-settings: normal;
 `;
 
 const RoomPreviewBar: FC<RoomPreviewBarProps> = ({ api, config, roomId, roomAlias, promptAskToJoin, children }) => {

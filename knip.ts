@@ -17,9 +17,19 @@ export default {
         // Unlisted peer dependency for @matrix-org/react-sdk-module-api
         "matrix-web-i18n",
     ],
-    entry: [
-        "packages/element-web-playwright-common/src/testcontainers/*",
-        "packages/element-web-playwright-common/src/fixtures/services.ts",
-        "packages/element-web-playwright-common/src/stale-screenshot-reporter.ts",
-    ],
+    workspaces: {
+        "modules/*/element-web": {
+            entry: "src/index.ts{x,}",
+        },
+        "packages/element-web-playwright-common": {
+            entry: [
+                "src/fixtures/index.ts",
+                "src/fixtures/services.ts",
+                "src/testcontainers/index.ts",
+                "src/testcontainers/synapse.ts",
+                "src/testcontainers/mas-config.ts",
+                "src/stale-screenshot-reporter.ts",
+            ],
+        },
+    },
 } satisfies KnipConfig;

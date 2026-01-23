@@ -10,7 +10,7 @@ import { type Page } from "@playwright/test";
 import { sample, uniqueId } from "lodash-es";
 
 import { test as base } from "./services.js";
-import { Credentials } from "../utils/api.js";
+import { type Credentials } from "../utils/api.js";
 
 /** Adds an initScript to the given page which will populate localStorage appropriately so that Element will use the given credentials. */
 export async function populateLocalStorageWithCredentials(page: Page, credentials: Credentials) {
@@ -70,7 +70,11 @@ export const test = base.extend<{
     user: Credentials;
 }>({
     displayName: undefined,
-    credentials: async ({ homeserver, displayName: testDisplayName }, use, testInfo) => {
+
+    // We don't directly depend upon the `context` fixture, but we do need to make sure that it has been run
+    // before this fixture, since it is responsible for configuring the APIRequestContext on the homeserver, so
+    // without it we cannot register the user.
+    credentials: async ({ context, homeserver, displayName: testDisplayName }, use, testInfo) => {
         const names = ["Alice", "Bob", "Charlie", "Daniel", "Eve", "Frank", "Grace", "Hannah", "Isaac", "Judy"];
         const password = uniqueId("password_");
         const displayName = testDisplayName ?? sample(names)!;

@@ -23,7 +23,7 @@ import { deepCopy } from "../utils/object.js";
 import { type HomeserverContainer, type StartedHomeserverContainer } from "./HomeserverContainer.js";
 import { type StartedMatrixAuthenticationServiceContainer } from "./mas.js";
 import { Api, ClientServerApi, type Verb, type Credentials } from "../utils/api.js";
-import { StartedMailpitContainer } from "./mailpit.js";
+import { type StartedMailpitContainer } from "./mailpit.js";
 
 const DEFAULT_CONFIG = {
     server_name: "localhost",
@@ -170,7 +170,12 @@ const DEFAULT_CONFIG = {
               room_name: string;
           },
     allow_guest_access: false,
-    experimental_features: {},
+    experimental_features: {} as Record<string, boolean>,
+    matrix_rtc: undefined as
+        | undefined
+        | {
+              transports: Array<{ type: string; [field: string]: string }>;
+          },
     oidc_providers: [],
     serve_server_wellknown: true,
     presence: {

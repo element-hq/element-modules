@@ -24,6 +24,13 @@ export interface AccountAuthInfo {
     userId: string;
 }
 
+// @public
+export interface AccountDataApi {
+    delete(eventType: string): Promise<void>;
+    get(eventType: string): Watchable<unknown>;
+    set(eventType: string, content: unknown): Promise<void>;
+}
+
 // @alpha @deprecated (undocumented)
 export interface AliasCustomisations {
     // (undocumented)
@@ -35,13 +42,26 @@ export interface AliasCustomisations {
 //
 // @public
 export interface Api extends LegacyModuleApiExtension, LegacyCustomisationsApiExtension, DialogApiExtension, AccountAuthApiExtension, ProfileApiExtension {
+    // @alpha
+    readonly builtins: BuiltinsApi;
+    readonly client: ClientApi;
     readonly config: ConfigApi;
     createRoot(element: Element): Root;
     // @alpha
     readonly customComponents: CustomComponentsApi;
+    // @alpha
+    readonly extras: ExtrasApi;
     readonly i18n: I18nApi;
     readonly navigation: NavigationApi;
     readonly rootNode: HTMLElement;
+    readonly stores: StoresApi;
+}
+
+// @alpha
+export interface BuiltinsApi {
+    renderNotificationDecoration(roomId: string): React.ReactNode;
+    renderRoomAvatar(roomId: string, size?: string): React.ReactNode;
+    renderRoomView(roomId: string, props?: RoomViewProps): React.ReactNode;
 }
 
 // @alpha @deprecated (undocumented)
@@ -53,6 +73,12 @@ export interface ChatExportCustomisations<ExportFormat, ExportType> {
         includeAttachments?: boolean;
         sizeMb?: number;
     };
+}
+
+// @public
+export interface ClientApi {
+    accountData: AccountDataApi;
+    getRoom: (id: string) => Room | null;
 }
 
 // @alpha @deprecated (undocumented)
@@ -140,8 +166,15 @@ export interface DirectoryCustomisations {
     requireCanonicalAliasAccessToPublish?(): boolean;
 }
 
+// @alpha
+export interface ExtrasApi {
+    getVisibleRoomBySpaceKey(spaceKey: string, cb: () => string[]): void;
+    setSpacePanelItem(spaceKey: string, props: SpacePanelItemProps): void;
+}
+
 // @public
 export interface I18nApi {
+    humanizeTime(timeMillis: number): string;
     get language(): string;
     register(translations: Partial<Translations>): void;
     translate(key: keyof Translations, variables?: Variables): string;
@@ -185,6 +218,9 @@ export interface LifecycleCustomisations {
     // (undocumented)
     onLoggedOutAndStorageCleared?(): void;
 }
+
+// @alpha
+export type LocationRenderFunction = () => JSX.Element;
 
 // @alpha
 export interface MatrixEvent {
@@ -272,7 +308,16 @@ export class ModuleLoader {
 
 // @public
 export interface NavigationApi {
+    openRoom(roomIdOrAlias: string, opts?: OpenRoomOptions): void;
+    // @alpha
+    registerLocationRenderer(path: string, renderer: LocationRenderFunction): void;
     toMatrixToLink(link: string, join?: boolean): Promise<void>;
+}
+
+// @public
+export interface OpenRoomOptions {
+    autoJoin?: boolean;
+    viaServers?: string[];
 }
 
 // @alpha
@@ -292,13 +337,51 @@ export interface ProfileApiExtension {
     readonly profile: Watchable<Profile>;
 }
 
+// @public
+export interface Room {
+    getLastActiveTimestamp: () => number;
+    id: string;
+    name: Watchable<string>;
+}
+
 // @alpha @deprecated (undocumented)
 export interface RoomListCustomisations<Room> {
     isRoomVisible?(room: Room): boolean;
 }
 
+// @public
+export interface RoomListStoreApi {
+    getRooms(): Watchable<Room[]>;
+    waitForReady(): Promise<void>;
+}
+
+// @alpha
+export interface RoomViewProps {
+    enableReadReceiptsAndMarkersOnActivity?: boolean;
+    hideComposer?: boolean;
+    hideHeader?: boolean;
+    hidePinnedMessageBanner?: boolean;
+    hideRightPanel?: boolean;
+    hideWidgets?: boolean;
+}
+
 // @alpha @deprecated (undocumented)
 export type RuntimeModuleConstructor = new (api: ModuleApi) => RuntimeModule;
+
+// @alpha
+export interface SpacePanelItemProps {
+    className?: string;
+    icon?: JSX.Element;
+    label: string;
+    onSelected: () => void;
+    style?: React.CSSProperties;
+    tooltip?: string;
+}
+
+// @public
+export interface StoresApi {
+    roomListStore: RoomListStoreApi;
+}
 
 // @public
 export type Translations = Record<string, {
@@ -325,9 +408,14 @@ export type Variables = {
 // @public
 export class Watchable<T> {
     constructor(currentValue: T);
+    // Warning: (ae-forgotten-export) The symbol "WatchFn" needs to be exported by the entry point index.d.ts
+    //
+    // (undocumented)
+    protected readonly listeners: Set<WatchFn<T>>;
+    protected onFirstWatch(): void;
+    protected onLastWatch(): void;
     // (undocumented)
     unwatch(listener: (value: T) => void): void;
-    // (undocumented)
     get value(): T;
     set value(value: T);
     // (undocumented)
