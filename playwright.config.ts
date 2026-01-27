@@ -50,9 +50,11 @@ export default defineConfig<Options>({
     use: {
         viewport: { width: 1280, height: 720 },
         ignoreHTTPSErrors: true,
-        video: "retain-on-failure",
+        // video: "retain-on-failure",
+        video: "on",
         baseURL,
-        trace: "on-first-retry",
+        // trace: "on-first-retry",
+        trace: "on",
     },
     webServer: {
         command: "docker run --rm -p 8080:80 ghcr.io/element-hq/element-web:develop",

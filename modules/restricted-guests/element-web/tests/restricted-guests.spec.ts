@@ -92,8 +92,7 @@ const applySharedTestConfig = (testInstance: typeof base) => {
     testInstance.use({
         displayName: "Tommy",
         synapseConfig: {
-            // TEMP: See if tests fail when guest access is disabled
-            allow_guest_access: false,
+            allow_guest_access: true,
         },
         labsFlags: ["feature_ask_to_join"],
     });
