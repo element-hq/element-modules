@@ -33,6 +33,15 @@ export class Logger {
     }
 
     /**
+     * Manually attach logs to the test run
+     * @param name - the human-readable name to associate the logs with
+     * @param log - the log itself
+     */
+    public writeLog(name: string, log: string) {
+        this.logs[name] = log;
+    }
+
+    /**
      * Hook to call when a test starts.
      * @param context - the browser context of the test.
      */

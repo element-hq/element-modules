@@ -24,6 +24,7 @@ import { type HomeserverContainer, type StartedHomeserverContainer } from "./Hom
 import { type StartedMatrixAuthenticationServiceContainer } from "./mas.js";
 import { Api, ClientServerApi, type Verb, type Credentials } from "../utils/api.js";
 import { type StartedMailpitContainer } from "./mailpit.js";
+import { type DockerBrowser } from "./DockerBrowser.js";
 
 const DEFAULT_CONFIG = {
     server_name: "localhost",
@@ -201,7 +202,10 @@ export class SynapseContainer extends GenericContainer implements HomeserverCont
     protected config: SynapseConfig;
     protected mas?: StartedMatrixAuthenticationServiceContainer;
 
-    public constructor(image = "ghcr.io/element-hq/synapse:develop") {
+    public constructor(
+        private readonly dockerBrowser: DockerBrowser | undefined,
+        image = "ghcr.io/element-hq/synapse:develop",
+    ) {
         super(image);
 
         this.config = deepCopy(DEFAULT_CONFIG);
@@ -285,13 +289,18 @@ export class SynapseContainer extends GenericContainer implements HomeserverCont
     public override async start(): Promise<StartedSynapseContainer> {
         // Synapse config public_baseurl needs to know what URL it'll be accessed from, so we have to map the port manually
         const port = await getFreePort();
+        const baseUrl = `http://localhost:${port}`;
+
+        // If the browser is running in a different network to playwright we will just forward the port from localhost via socat.
+        // This makes it easier to reason about URLs between different test environments
+        this.dockerBrowser?.exposeHostPort(port);
 
         this.withExposedPorts({
             container: 8008,
             host: port,
         })
             .withConfig({
-                public_baseurl: `http://localhost:${port}`,
+                public_baseurl: baseUrl,
             })
             .withCopyContentToContainer([
                 {
@@ -301,7 +310,7 @@ export class SynapseContainer extends GenericContainer implements HomeserverCont
             ]);
 
         const container = await super.start();
-        const baseUrl = `http://localhost:${port}`;
+
         if (this.mas) {
             return new StartedSynapseWithMasContainer(
                 container,

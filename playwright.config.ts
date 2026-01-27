@@ -14,6 +14,8 @@ import type { Options } from "./playwright/element-web-test";
 
 const baseURL = process.env["BASE_URL"] ?? "http://localhost:8080";
 
+const browserInDocker = !!process.env.PW_BROWSER_IN_DOCKER;
+
 const chromeProject = {
     ...devices["Desktop Chrome"],
     channel: "chromium",
@@ -21,6 +23,7 @@ const chromeProject = {
     launchOptions: {
         args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream", "--mute-audio"],
     },
+    browserInDocker,
 };
 
 const MODULE_PREFIX = "@element-hq/element-web-module-";
@@ -63,6 +66,6 @@ export default defineConfig<Options>({
     workers: 1,
     retries: process.env.CI ? 2 : 0,
     reporter: process.env.CI ? [["html"], ["github"]] : [["html", { outputFolder: "playwright-html-report" }]],
-    snapshotPathTemplate: "{snapshotDir}/{testFilePath}/{arg}-{platform}{ext}",
+    snapshotPathTemplate: `{snapshotDir}/{testFilePath}/{arg}-${browserInDocker ? "linux" : "{platform}"}{ext}`,
     forbidOnly: !!process.env.CI,
 });

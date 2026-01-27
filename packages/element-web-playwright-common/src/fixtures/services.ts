@@ -8,6 +8,7 @@ Please see LICENSE files in the repository root for full details.
 import { type MailpitClient } from "mailpit-api";
 import { Network, type StartedNetwork } from "testcontainers";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
+import { env } from "node:process";
 
 import {
     type SynapseConfig,
@@ -22,6 +23,7 @@ import { Logger } from "../utils/logger.js";
 // We want to avoid using `mergeTests` in index.ts because it drops useful type information about the fixtures. Instead,
 // we add `axe` into our fixture suite by using its `test` as a base, so that there is a linear hierarchy.
 import { test as base } from "./axe.js";
+import { DockerBrowser } from "../testcontainers/DockerBrowser.js";
 
 /**
  * Test-scoped fixtures available in the test
@@ -39,6 +41,12 @@ export interface WorkerOptions {
      * The synapse configuration to use for the homeserver.
      */
     synapseConfig: Partial<SynapseConfig>;
+
+    /**
+     * Whether to run a browser under docker and connect to that.
+     * Primarily intended for screenshot tests to improve screenshot stability.
+     */
+    browserInDocker: boolean;
 }
 
 /**
@@ -54,6 +62,11 @@ export interface Services {
      * The started testcontainers network instance for the worker.
      */
     network: StartedNetwork;
+
+    /**
+     * The browser-in-docker manager
+     */
+    dockerBrowser?: DockerBrowser;
 
     /**
      * The started postgres container instance for the worker.
@@ -147,8 +160,8 @@ export const test = base.extend<TestFixtures, WorkerOptions & Services>({
 
     synapseConfig: [{}, { scope: "worker" }],
     _homeserver: [
-        async ({ logger }, use) => {
-            const container = new SynapseContainer().withLogConsumer(logger.getConsumer("synapse"));
+        async ({ logger, dockerBrowser }, use) => {
+            const container = new SynapseContainer(dockerBrowser).withLogConsumer(logger.getConsumer("synapse"));
             await use(container);
         },
         { scope: "worker" },
@@ -180,7 +193,35 @@ export const test = base.extend<TestFixtures, WorkerOptions & Services>({
         { scope: "worker" },
     ],
 
-    context: async ({ logger, context, request, homeserver }, use, testInfo) => {
+    browserInDocker: [false, { scope: "worker", option: true }],
+    dockerBrowser: [
+        async ({ logger, browserInDocker }, use) => {
+            let instance: DockerBrowser | undefined;
+            if (browserInDocker) {
+                instance = new DockerBrowser(logger);
+                await instance.start();
+                // Expose the running element-web which is likely either a webpack-dev-server or running docker container
+                const baseUrl = new URL(env.PLAYWRIGHT_TEST_BASE_URL ?? env.BASE_URL ?? "http://localhost:8080");
+                await instance.exposeHostPort(Number.parseInt(baseUrl.port, 10));
+            }
+            await use(instance);
+            await instance?.stop();
+        },
+        // Increase fixture timeout as building the docker image can take some time
+        { scope: "worker", timeout: 120_000 },
+    ],
+    connectOptions: [
+        async ({ connectOptions, dockerBrowser }, use) => {
+            if (dockerBrowser) {
+                connectOptions = { wsEndpoint: dockerBrowser.wsEndpoint };
+            }
+
+            await use(connectOptions);
+        },
+        { scope: "worker" },
+    ],
+
+    context: async ({ logger, context, request, homeserver, dockerBrowser }, use, testInfo) => {
         homeserver.setRequest(request);
         await logger.onTestStarted(context);
         await use(context);
