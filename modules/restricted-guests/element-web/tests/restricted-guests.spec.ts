@@ -137,6 +137,12 @@ const test = base.extend<
     }
 >({
     ...sharedFixtures,
+    config: async ({ config, guestHomeserver }, use) => {
+        config["io.element.element-web-modules.restricted-guests"] = {
+            guest_user_homeserver_url: guestHomeserver.baseUrl,
+        };
+        await use(config);
+    },
     guestHomeserver: [
         async ({ logger, synapseConfig, network }, use) => {
             const container = await new RestrictedGuestsSynapseContainer()
@@ -165,6 +171,12 @@ const masTest = base.extend<
     }
 >({
     ...sharedFixtures,
+    config: async ({ config, guestHomeserver }, use) => {
+        config["io.element.element-web-modules.restricted-guests"] = {
+            guest_user_homeserver_url: guestHomeserver.baseUrl,
+        };
+        await use(config);
+    },
     guestMas: [
         async ({ logger, network, postgres }, use) => {
             const container = await new MatrixAuthenticationServiceContainer(postgres)
@@ -234,12 +246,6 @@ const defineRestrictedGuestsTests = (testInstance: RestrictedGuestsTestInstance,
         });
 
         testInstance.describe("with config", () => {
-            testInstance.beforeEach(({ config, guestHomeserver }) => {
-                config["io.element.element-web-modules.restricted-guests"] = {
-                    guest_user_homeserver_url: guestHomeserver.baseUrl,
-                };
-            });
-
             testInstance(
                 "should show the default room preview bar for logged in users",
                 { tag: ["@screenshot"] },
