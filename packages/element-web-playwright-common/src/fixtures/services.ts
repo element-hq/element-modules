@@ -142,12 +142,13 @@ export const test = base.extend<TestFixtures, WorkerOptions & Services>({
     ],
 
     mailpit: [
-        async ({ logger, network }, use) => {
+        async ({ logger, network, dockerBrowser }, use) => {
             const container = await new MailpitContainer()
                 .withNetwork(network)
                 .withNetworkAliases("mailpit")
                 .withLogConsumer(logger.getConsumer("mailpit"))
                 .start();
+            dockerBrowser?.exposeHostPort(container.apiPort);
             await use(container);
             await container.stop();
         },
@@ -160,14 +161,14 @@ export const test = base.extend<TestFixtures, WorkerOptions & Services>({
 
     synapseConfig: [{}, { scope: "worker" }],
     _homeserver: [
-        async ({ logger, dockerBrowser }, use) => {
-            const container = new SynapseContainer(dockerBrowser).withLogConsumer(logger.getConsumer("synapse"));
+        async ({ logger }, use) => {
+            const container = new SynapseContainer().withLogConsumer(logger.getConsumer("synapse"));
             await use(container);
         },
         { scope: "worker" },
     ],
     homeserver: [
-        async ({ logger, network, _homeserver: homeserver, synapseConfig, mas }, use) => {
+        async ({ logger, network, _homeserver: homeserver, synapseConfig, mas, dockerBrowser }, use) => {
             if (homeserver instanceof SynapseContainer) {
                 homeserver.withConfig(synapseConfig);
             }
@@ -177,6 +178,11 @@ export const test = base.extend<TestFixtures, WorkerOptions & Services>({
                 .withLogConsumer(logger.getConsumer("homeserver"))
                 .withMatrixAuthenticationService(mas)
                 .start();
+
+            const baseUrl = new URL(container.baseUrl);
+            // If the browser is running in a different network to playwright we will just forward the port from localhost via socat.
+            // This makes it easier to reason about URLs between different test environments
+            dockerBrowser?.exposeHostPort(Number.parseInt(baseUrl.port, 10));
 
             await use(container);
             await container.stop();
