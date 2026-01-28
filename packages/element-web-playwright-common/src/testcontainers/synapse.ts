@@ -285,13 +285,14 @@ export class SynapseContainer extends GenericContainer implements HomeserverCont
     public override async start(): Promise<StartedSynapseContainer> {
         // Synapse config public_baseurl needs to know what URL it'll be accessed from, so we have to map the port manually
         const port = await getFreePort();
+        const baseUrl = `http://localhost:${port}`;
 
         this.withExposedPorts({
             container: 8008,
             host: port,
         })
             .withConfig({
-                public_baseurl: `http://localhost:${port}`,
+                public_baseurl: baseUrl,
             })
             .withCopyContentToContainer([
                 {
@@ -301,7 +302,7 @@ export class SynapseContainer extends GenericContainer implements HomeserverCont
             ]);
 
         const container = await super.start();
-        const baseUrl = `http://localhost:${port}`;
+
         if (this.mas) {
             return new StartedSynapseWithMasContainer(
                 container,

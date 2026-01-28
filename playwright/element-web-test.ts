@@ -6,8 +6,9 @@ Please see LICENSE files in the repository root for full details.
 */
 
 import { test as base, expect, type TestFixtures } from "@element-hq/element-web-playwright-common";
+import { type WorkerOptions } from "@element-hq/element-web-playwright-common/lib/fixtures";
 
-export interface Options {
+export interface Options extends Pick<WorkerOptions, "browserInDocker"> {
     moduleDir: string;
     modules: string[];
 }
