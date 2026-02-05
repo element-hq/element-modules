@@ -1,5 +1,13 @@
 #!/bin/bash
 
+# Deprecated: element-web-playwright-common can now connect to a browser running in Docker
+# which can be used instead of this utility script by specifying dockerBrowser option-fixture as `true`.
+# This has the benefits of:
+#   1. Simplifying debugging as playwright is running on your host
+#   2. Simplifying dependencies as the Docker environment doesn't need a full project node_modules,
+#      especially helpful when the project makes use of native dependencies and you develop on a system other than Linux.
+#   3. Avoiding Docker-in-Docker which can be problematic for some root-less Docker environments.
+
 set -e
 
 # Handle symlinks here as we tend to be executed as an npm binary

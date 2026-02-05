@@ -5,8 +5,8 @@ SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
 Please see LICENSE files in the repository root for full details.
 */
 
-import { StartedSynapseContainer } from "@element-hq/element-web-playwright-common/lib/testcontainers";
-import { Credentials } from "@element-hq/element-web-playwright-common/lib/utils/api.ts";
+import { type StartedSynapseContainer } from "@element-hq/element-web-playwright-common/lib/testcontainers";
+import { type Credentials } from "@element-hq/element-web-playwright-common/lib/utils/api.ts";
 
 import { test as base, expect } from "../../../../playwright/element-web-test.ts";
 import { RestrictedGuestsSynapseContainer } from "./services.ts";
@@ -52,8 +52,8 @@ const test = base.extend<
         { scope: "worker" },
     ],
     guestHomeserver: [
-        async ({ logger, synapseConfig, network }, use) => {
-            const container = await new RestrictedGuestsSynapseContainer()
+        async ({ logger, synapseConfig, network, dockerBrowser }, use) => {
+            const container = await new RestrictedGuestsSynapseContainer(dockerBrowser)
                 .withConfig(synapseConfig)
                 .withConfig({ server_name: "guest-homeserver" })
                 .withNetwork(network)
