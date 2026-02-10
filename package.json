@@ -44,7 +44,7 @@
         "eslint-plugin-react-compiler": "^19.0.0-beta-27714ef-20250124",
         "eslint-plugin-react-hooks": "^7.0.0",
         "eslint-plugin-unicorn": "^56.0.0",
-        "glob": "^13.0.0",
+        "glob": "^13.0.1",
         "husky": "^9.1.7",
         "knip": "^5.43.5",
         "lint-staged": "^16.0.0",
