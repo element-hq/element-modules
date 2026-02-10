@@ -46,6 +46,10 @@ export class StartedMailpitContainer extends AbstractStartedContainer {
         this.client = new MailpitClient(`http://${container.getHost()}:${container.getMappedPort(8025)}`);
     }
 
+    public get apiPort(): number {
+        return this.getMappedPort(8025);
+    }
+
     /**
      * Get the hostname to use to connect to the Mailpit container from inside the docker network.
      */
