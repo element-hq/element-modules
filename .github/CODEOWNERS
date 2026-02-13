@@ -1,3 +1,3 @@
 *                         @element-hq/element-web-reviewers
-synapse/                  @element-hq/server-products-developers
-.github/workflows/        @element-hq/server-products-developers
+synapse/                  @element-hq/synapse-core
+.github/workflows/        @element-hq/element-web-reviewers @element-hq/synapse-core
