@@ -2279,14 +2279,14 @@
   integrity sha512-WmoN8qaIAo7WTYWbAZuG8PYEhn5fkz7dZrqTBZ7dtt//lL2Gwms1IcnQ5yHqjDfX8Ft5j4YzDM23f87zBfDe9g==
 
 "@vector-im/compound-design-tokens@^6.0.0":
-  version "6.6.0"
-  resolved "https://registry.yarnpkg.com/@vector-im/compound-design-tokens/-/compound-design-tokens-6.6.0.tgz#deac29620caa4c3c6e6669e1392acf40c5ca8eed"
-  integrity sha512-IqHldApA5nG3US8bsbH/W2cHx2a7lOF7sOE1HQRAUxLP1B3yfIo8sgw1u6g2kvj8DM4sFIZoKcQ3Lvwym+AsYw==
+  version "6.10.1"
+  resolved "https://registry.yarnpkg.com/@vector-im/compound-design-tokens/-/compound-design-tokens-6.10.1.tgz#9e49b7e6d6915af3b86ffa93241d4a9be114473c"
+  integrity sha512-rbb+aUQhB6DppZrfZpwg5o2K4Uzil5QGmAoOSBmAdfgFMwQWkhwk1jnZozbH/vbsqwTLtRdX6tztXRZ1W9sJ0A==
 
 "@vector-im/compound-web@^8.0.0":
-  version "8.3.4"
-  resolved "https://registry.yarnpkg.com/@vector-im/compound-web/-/compound-web-8.3.4.tgz#842bfcae9ed11e19656cd4bb90d40fed64dbc2c4"
-  integrity sha512-um+rCfnkEyOEIF8qpsLvvxi/jRQXjhul+mXDCsZHBEfashj08zf5euEQxesleAIuDvNXtIWyxDJpwzxIm21YEg==
+  version "8.4.0"
+  resolved "https://registry.yarnpkg.com/@vector-im/compound-web/-/compound-web-8.4.0.tgz#00049e9035c13f4bd9c5b36c490091bdba210899"
+  integrity sha512-xScGP2UP04qxXBCI6D7MfzwfT0w+8k5sepXehaHleLZX0pykdPFeFp+P1WJz2NocQgEnqWIYHrp50kMrYzs0fA==
   dependencies:
     "@floating-ui/react" "^0.27.0"
     "@radix-ui/react-context-menu" "^2.2.16"
