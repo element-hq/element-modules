@@ -7,6 +7,7 @@
 import { ComponentType } from 'react';
 import { JSX } from 'react';
 import { ModuleApi } from '@matrix-org/react-sdk-module-api';
+import { ReactNode } from 'react';
 import { Root } from 'react-dom/client';
 import { RuntimeModule } from '@matrix-org/react-sdk-module-api';
 
@@ -49,6 +50,8 @@ export interface Api extends LegacyModuleApiExtension, LegacyCustomisationsApiEx
     createRoot(element: Element): Root;
     // @alpha
     readonly customComponents: CustomComponentsApi;
+    // @alpha
+    readonly customisations: CustomisationsApi;
     // @alpha
     readonly extras: ExtrasApi;
     readonly i18n: I18nApi;
@@ -109,9 +112,33 @@ export interface ConfigApi {
 
 // @alpha
 export interface CustomComponentsApi {
+    registerLoginComponent(renderer: CustomLoginRenderFunction): void;
     registerMessageRenderer(eventTypeOrFilter: string | ((mxEvent: MatrixEvent) => boolean), renderer: CustomMessageRenderFunction, hints?: CustomMessageRenderHints): void;
     registerRoomPreviewBar(renderer: CustomRoomPreviewBarRenderFunction): void;
 }
+
+// @alpha
+export interface CustomisationsApi {
+    registerShouldShowComponent(fn: (this: void, component: UIComponent) => boolean | void): void;
+}
+
+// @alpha
+export type CustomLoginComponentProps = {
+    serverConfig: CustomLoginComponentPropsServerConfig;
+    fragmentAfterLogin?: string;
+    children?: ReactNode;
+    onLoggedIn(data: AccountAuthInfo): void;
+    onServerConfigChange(config: CustomLoginComponentPropsServerConfig): void;
+};
+
+// @alpha
+export interface CustomLoginComponentPropsServerConfig {
+    hsName: string;
+    hsUrl: string;
+}
+
+// @alpha
+export type CustomLoginRenderFunction = ExtendablePropsRenderFunction<CustomLoginComponentProps>;
 
 // @alpha
 export type CustomMessageComponentProps = {
@@ -170,6 +197,11 @@ export interface DirectoryCustomisations {
     // (undocumented)
     requireCanonicalAliasAccessToPublish?(): boolean;
 }
+
+// @alpha
+export type ExtendablePropsRenderFunction<BaseProps> = <P extends BaseProps>(
+props: P,
+originalComponent: (props: P) => JSX.Element) => JSX.Element;
 
 // @alpha
 export interface ExtrasApi {
@@ -402,6 +434,17 @@ export type Translations = Record<string, {
     [ietfLanguageTag: string]: string;
 }>;
 
+// @alpha
+export const enum UIComponent {
+    AddIntegrations = "UIComponent.addIntegrations",
+    CreateRooms = "UIComponent.roomCreation",
+    CreateSpaces = "UIComponent.spaceCreation",
+    ExploreRooms = "UIComponent.exploreRooms",
+    FilterContainer = "UIComponent.filterContainer",
+    InviteUsers = "UIComponent.sendInvites",
+    RoomOptionsMenu = "UIComponent.roomOptionsMenu"
+}
+
 // @alpha @deprecated (undocumented)
 export interface UserIdentifierCustomisations {
     getDisplayUserIdentifier(userId: string, opts: {
@@ -476,4 +519,3 @@ export interface WidgetVariablesCustomisations {
 // (No @packageDocumentation comment for this package)
 
 ```
-
