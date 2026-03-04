@@ -6,13 +6,10 @@ Please see LICENSE files in the repository root for full details.
 */
 
 import { defineConfig, devices, type Project } from "@playwright/test";
-import { globSync } from "glob";
-import fs from "node:fs";
+import fs, { globSync } from "node:fs";
 import path from "node:path";
 
 import type { Options } from "./playwright/element-web-test";
-
-const baseURL = process.env["BASE_URL"] ?? "http://localhost:8080";
 
 const chromeProject = {
     ...devices["Desktop Chrome"],
@@ -23,30 +20,54 @@ const chromeProject = {
     },
 };
 
-const MODULE_PREFIX = "@element-hq/element-web-module-";
+/**
+We assume that all modules will have the following directory structure:
+<repo_root>
+└── modules/
+    └── my-module/
+        └── element-web/
+            ├── e2e/
+            │   ├── test-1.spec.ts
+            │   └── test-2.spec.ts
+            └── package.json
 
-const modulesWithTests = globSync("modules/*/element-web/tests", {});
-const moduleProjects = modulesWithTests.map<Project<Options>>((testDir) => {
-    const moduleDir = testDir.split("/").slice(0, -1).join("/");
-    const packageJson = JSON.parse(fs.readFileSync(path.join(moduleDir, "package.json"), "utf-8"));
+The following code maps each such module (my-module in the example above) to a separate
+playwright project.
+ */
+const projects: Project<Options>[] = [];
+
+// Get all the directories that hold playwright tests
+const moduleTestDirectories = globSync("modules/*/element-web/e2e", {});
+
+// Process each directory
+for (const testDirectory of moduleTestDirectories) {
+    // Based on the directory structure, the parent directory of the test directory holds package.json.
+    const moduleDirectory = path.join(testDirectory, "..");
+
+    // Get module name from package.json
+    const packageJson = JSON.parse(fs.readFileSync(path.join(moduleDirectory, "package.json"), "utf-8"));
+    const MODULE_PREFIX = "@element-hq/element-web-module-";
     const name = packageJson.name.startsWith(MODULE_PREFIX)
         ? packageJson.name.slice(MODULE_PREFIX.length)
         : packageJson.name;
 
-    return {
+    // Create playwright project
+    projects.push({
         name,
         use: {
             ...chromeProject,
-            moduleDir,
+            moduleDir: moduleDirectory,
         },
-        testDir: `${moduleDir}/tests`,
-        snapshotDir: `${moduleDir}/tests/snapshots`,
-        outputDir: `${moduleDir}/tests/_results`,
-    };
-});
+        testDir: testDirectory,
+        snapshotDir: `${testDirectory}/snapshots`,
+        outputDir: `${testDirectory}/_results`,
+    });
+}
+
+const baseURL = process.env["BASE_URL"] ?? "http://localhost:8080";
 
 export default defineConfig<Options>({
-    projects: [...moduleProjects],
+    projects,
     use: {
         viewport: { width: 1280, height: 720 },
         ignoreHTTPSErrors: true,
