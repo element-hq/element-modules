@@ -5,8 +5,10 @@
 ```ts
 
 import { ComponentType } from 'react';
+import { IWidget } from 'matrix-widget-api';
 import { JSX } from 'react';
 import { ModuleApi } from '@matrix-org/react-sdk-module-api';
+import { ReactNode } from 'react';
 import { Root } from 'react-dom/client';
 import { RuntimeModule } from '@matrix-org/react-sdk-module-api';
 
@@ -50,11 +52,15 @@ export interface Api extends LegacyModuleApiExtension, LegacyCustomisationsApiEx
     // @alpha
     readonly customComponents: CustomComponentsApi;
     // @alpha
+    readonly customisations: CustomisationsApi;
+    // @alpha
     readonly extras: ExtrasApi;
     readonly i18n: I18nApi;
     readonly navigation: NavigationApi;
     readonly rootNode: HTMLElement;
     readonly stores: StoresApi;
+    // @alpha
+    readonly widget: WidgetApi;
     // @alpha
     readonly widgetLifecycle: WidgetLifecycleApi;
 }
@@ -108,10 +114,37 @@ export interface ConfigApi {
 }
 
 // @alpha
+export type Container = "top" | "right" | "center";
+
+// @alpha
 export interface CustomComponentsApi {
+    registerLoginComponent(renderer: CustomLoginRenderFunction): void;
     registerMessageRenderer(eventTypeOrFilter: string | ((mxEvent: MatrixEvent) => boolean), renderer: CustomMessageRenderFunction, hints?: CustomMessageRenderHints): void;
     registerRoomPreviewBar(renderer: CustomRoomPreviewBarRenderFunction): void;
 }
+
+// @alpha
+export interface CustomisationsApi {
+    registerShouldShowComponent(fn: (this: void, component: UIComponent) => boolean | void): void;
+}
+
+// @alpha
+export type CustomLoginComponentProps = {
+    serverConfig: CustomLoginComponentPropsServerConfig;
+    fragmentAfterLogin?: string;
+    children?: ReactNode;
+    onLoggedIn(data: AccountAuthInfo): void;
+    onServerConfigChange(config: CustomLoginComponentPropsServerConfig): void;
+};
+
+// @alpha
+export interface CustomLoginComponentPropsServerConfig {
+    hsName: string;
+    hsUrl: string;
+}
+
+// @alpha
+export type CustomLoginRenderFunction = ExtendablePropsRenderFunction<CustomLoginComponentProps>;
 
 // @alpha
 export type CustomMessageComponentProps = {
@@ -172,7 +205,13 @@ export interface DirectoryCustomisations {
 }
 
 // @alpha
+export type ExtendablePropsRenderFunction<BaseProps> = <P extends BaseProps>(
+props: P,
+originalComponent: (props: P) => JSX.Element) => JSX.Element;
+
+// @alpha
 export interface ExtrasApi {
+    addRoomHeaderButtonCallback(cb: RoomHeaderButtonsCallback): void;
     getVisibleRoomBySpaceKey(spaceKey: string, cb: () => string[]): void;
     setSpacePanelItem(spaceKey: string, props: SpacePanelItemProps): void;
 }
@@ -358,6 +397,9 @@ export interface Room {
     name: Watchable<string>;
 }
 
+// @alpha
+export type RoomHeaderButtonsCallback = (roomId: string) => JSX.Element | undefined;
+
 // @alpha @deprecated (undocumented)
 export interface RoomListCustomisations<Room> {
     isRoomVisible?(room: Room): boolean;
@@ -402,6 +444,17 @@ export type Translations = Record<string, {
     [ietfLanguageTag: string]: string;
 }>;
 
+// @alpha
+export const enum UIComponent {
+    AddIntegrations = "UIComponent.addIntegrations",
+    CreateRooms = "UIComponent.roomCreation",
+    CreateSpaces = "UIComponent.spaceCreation",
+    ExploreRooms = "UIComponent.exploreRooms",
+    FilterContainer = "UIComponent.filterContainer",
+    InviteUsers = "UIComponent.sendInvites",
+    RoomOptionsMenu = "UIComponent.roomOptionsMenu"
+}
+
 // @alpha @deprecated (undocumented)
 export interface UserIdentifierCustomisations {
     getDisplayUserIdentifier(userId: string, opts: {
@@ -434,6 +487,14 @@ export class Watchable<T> {
     set value(value: T);
     // (undocumented)
     watch(listener: (value: T) => void): void;
+}
+
+// @alpha
+export interface WidgetApi {
+    getAppAvatarUrl(app: IWidget, width?: number, height?: number, resizeMethod?: string): string | null;
+    getWidgetsInRoom(roomId: string): IWidget[];
+    isAppInContainer(app: IWidget, container: Container, roomId: string): boolean;
+    moveAppToContainer(app: IWidget, container: Container, roomId: string): void;
 }
 
 // @alpha
@@ -476,4 +537,3 @@ export interface WidgetVariablesCustomisations {
 // (No @packageDocumentation comment for this package)
 
 ```
-
