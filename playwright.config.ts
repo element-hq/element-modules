@@ -84,7 +84,12 @@ export default defineConfig<Options>({
     workers: 1,
     retries: process.env.CI ? 2 : 0,
     reporter: process.env.CI
-        ? [["list"], ["html"], ["github"]]
+        ? [
+              ["list"],
+              ["html"],
+              ["github"],
+              ["@element-hq/element-web-playwright-common/lib/stale-screenshot-reporter.js"],
+          ]
         : [["list"], ["html", { outputFolder: "playwright-html-report" }]],
     snapshotPathTemplate: "{snapshotDir}/{testFilePath}/{arg}-{platform}{ext}",
     forbidOnly: !!process.env.CI,
