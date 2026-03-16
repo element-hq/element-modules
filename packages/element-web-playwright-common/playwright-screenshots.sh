@@ -9,6 +9,7 @@ SCRIPT_DIR=$(dirname "$SCRIPT_PATH")
 IMAGE_NAME="element-web-playwright-common"
 
 if docker --version | grep -q podman; then docker_is_podman=1; fi
+if [[ "$OSTYPE" == "darwin"* ]]; then os_is_macos=true; fi
 
 build_image() {
   echo "Building $IMAGE_NAME image in $SCRIPT_DIR"
@@ -26,19 +27,24 @@ build_image() {
   docker build -t "$IMAGE_NAME" --build-arg "PLAYWRIGHT_VERSION=$PW_VERSION" "$SCRIPT_DIR"
 }
 
-# Find the docker socket on the host
-case "$DOCKER_HOST" in
-    unix://*)
-        docker_sock="${DOCKER_HOST:7}"
-        ;;
-    "")
-        docker_sock="/var/run/docker.sock"
-        ;;
-    *)
-        echo "$0: unsupported DOCKER_HOST setting '${DOCKER_HOST}'" >&2
-        exit 1;
-        ;;
-esac
+# Docker is running in a VM on macOS, the socket location is at his default location
+if [ "$os_is_macos" = true ]; then
+    docker_sock="/var/run/docker.sock"
+else
+    # Find the docker socket on the host
+    case "$DOCKER_HOST" in
+        unix://*)
+            docker_sock="${DOCKER_HOST:7}"
+            ;;
+        "")
+            docker_sock="/var/run/docker.sock"
+            ;;
+        *)
+            echo "$0: unsupported DOCKER_HOST setting '${DOCKER_HOST}'" >&2
+            exit 1;
+            ;;
+    esac
+fi
 
 RUN_ARGS=(
   --rm
