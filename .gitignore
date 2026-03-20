@@ -155,3 +155,4 @@ coverage/
 !**/tests/snapshots/**/*-linux.png
 !**/tests/snapshots/**/*-linux.aria.yml
 /playwright-report/
+.DS_Store

@@ -45,7 +45,7 @@ module.exports = {
             files: [
                 "packages/element-web-playwright-common/**/*.ts",
                 "playwright/**/*.ts",
-                "modules/*/element-web/tests/**/*.{ts,tsx}",
+                "modules/*/element-web/e2e/**/*.{ts,tsx}",
             ],
             rules: {
                 // This is necessary for Playwright fixtures
