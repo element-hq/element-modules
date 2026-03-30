@@ -6,7 +6,7 @@
  */
 import { test as base } from "./services.js";
 
-export interface TestFixtures {
+export const test = base.extend<{
     /**
      * Whether the left panel should have its width fixed.
      * This is done because the library that we use for rendering collapsible
@@ -17,8 +17,6 @@ export interface TestFixtures {
      * behaviour.
      */
     lockLeftPanelWidth: boolean;
-}
-
-export const test = base.extend<TestFixtures>({
+}>({
     lockLeftPanelWidth: true,
 });
