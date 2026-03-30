@@ -28,6 +28,21 @@ jobs:
             - name: Install Deps
               run: "yarn install --frozen-lockfile"
 
+            - name: Get installed Playwright version
+              id: playwright
+              run: echo "version=$(yarn list --pattern @playwright/test --depth=0 --json --non-interactive --no-progress | jq -r '.data.trees[].name')" >> $GITHUB_OUTPUT
+
+            - name: Cache playwright binaries
+              uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5
+              id: playwright-cache
+              with:
+                  path: ~/.cache/ms-playwright
+                  key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ steps.playwright.outputs.version }}-onlyshell
+
+            - name: Install Playwright browsers
+              if: steps.playwright-cache.outputs.cache-hit != 'true'
+              run: "yarn playwright install --with-deps --only-shell"
+
             - name: Run tests
               run: yarn test
 
