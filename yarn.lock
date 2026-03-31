@@ -2395,9 +2395,9 @@
   integrity sha512-WmoN8qaIAo7WTYWbAZuG8PYEhn5fkz7dZrqTBZ7dtt//lL2Gwms1IcnQ5yHqjDfX8Ft5j4YzDM23f87zBfDe9g==
 
 "@vector-im/compound-design-tokens@^6.0.0":
-  version "6.10.1"
-  resolved "https://registry.yarnpkg.com/@vector-im/compound-design-tokens/-/compound-design-tokens-6.10.1.tgz#9e49b7e6d6915af3b86ffa93241d4a9be114473c"
-  integrity sha512-rbb+aUQhB6DppZrfZpwg5o2K4Uzil5QGmAoOSBmAdfgFMwQWkhwk1jnZozbH/vbsqwTLtRdX6tztXRZ1W9sJ0A==
+  version "6.10.2"
+  resolved "https://registry.yarnpkg.com/@vector-im/compound-design-tokens/-/compound-design-tokens-6.10.2.tgz#6dfa3bad14e99ffcf4b4c12be83a29bde6c4e2b7"
+  integrity sha512-imid8SUZBlWwDMjtzYq+LmxAqW6n5WNotBD/AbUoAube4Vk2BNicd8b+LI+YHDdMukG6GXYUDtluQF8j5/9apw==
 
 "@vector-im/compound-web@^8.0.0":
   version "8.4.0"
@@ -7672,6 +7672,11 @@ vite@^7.1.11:
     tinyglobby "^0.2.15"
   optionalDependencies:
     fsevents "~2.3.3"
+
+vitest-sonar-reporter@^2.0.0:
+  version "2.0.4"
+  resolved "https://registry.yarnpkg.com/vitest-sonar-reporter/-/vitest-sonar-reporter-2.0.4.tgz#e81ae089364bea257f4da89b38599ae52535e41f"
+  integrity sha512-6mKFLXYzaHsuR+qnmuXXVhcjhostuicZ9iL3I325uf6sUKSZ2ZOpDWUBcgQwEmGs2xE05SPF6F72eoHmfOWX7A==
 
 vitest-sonar-reporter@^3.0.0:
   version "3.0.0"
