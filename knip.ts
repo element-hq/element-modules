@@ -15,10 +15,12 @@ export default {
         // Needed for lint:workflows
         "@action-validator/cli",
         "@action-validator/core",
-        // Needed for backwards-compatible types
-        "@matrix-org/react-sdk-module-api",
         // Unlisted peer dependency for @matrix-org/react-sdk-module-api
         "matrix-web-i18n",
+    ],
+    ignoreBinaries: [
+        // False positive for `yarn list`
+        "list",
     ],
     workspaces: {
         "modules/*/element-web": {
