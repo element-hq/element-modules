@@ -1,7 +1,7 @@
 ARG DEBIAN_VERSION_NUMERIC=12
 
 # Now copy it into our base image.
-FROM gcr.io/distroless/base-nossl-debian${DEBIAN_VERSION_NUMERIC}:debug@sha256:12dbb4f46c5f712fe3da1c7a441602ee91eb87a5d46b0e725b4440b852000538 AS build
+FROM gcr.io/distroless/base-nossl-debian${DEBIAN_VERSION_NUMERIC}:debug@sha256:eacaa3a43627a7936de63d04028b034f36f21b930cc6f50c4650d63f4672fed6 AS build
 
 FROM gcr.io/distroless/base-nossl-debian${DEBIAN_VERSION_NUMERIC}
 
