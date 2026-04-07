@@ -9,7 +9,7 @@ Please see LICENSE files in the repository root for full details.
 import { type Page } from "@playwright/test";
 import { sample, uniqueId } from "lodash-es";
 
-import { test as base } from "./services.js";
+import { test as base } from "./panel.js";
 import { type Credentials } from "../utils/api.js";
 
 /** Adds an initScript to the given page which will populate localStorage appropriately so that Element will use the given credentials. */
@@ -93,9 +93,18 @@ export const test = base.extend<{
         await use(page);
     },
 
-    user: async ({ pageWithCredentials: page, credentials }, use) => {
+    user: async ({ pageWithCredentials: page, credentials, lockLeftPanelWidth }, use) => {
         await page.goto("/");
         await page.waitForSelector(".mx_MatrixChat", { timeout: 30000 });
+        if (lockLeftPanelWidth) {
+            await page.addStyleTag({
+                content: `
+                        #left-panel {
+                            flex: 0 0 369.6875px !important;
+                        }
+                `,
+            });
+        }
         await use(credentials);
     },
 });
