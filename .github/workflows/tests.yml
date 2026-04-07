@@ -41,7 +41,7 @@ jobs:
 
             - name: Install Playwright browsers
               if: steps.playwright-cache.outputs.cache-hit != 'true'
-              run: "yarn playwright install --with-deps --only-shell --ignore-scripts"
+              run: "YARN_ENABLE_SCRIPTS=false yarn playwright install --with-deps --only-shell"
 
             - name: Run tests
               run: yarn test
