@@ -23,6 +23,7 @@ import { type ClientApi } from "./client.ts";
 import { type WidgetLifecycleApi } from "./widget-lifecycle.ts";
 import { type WidgetApi } from "./widget.ts";
 import { type CustomisationsApi } from "./customisations.ts";
+import { type BrandApi } from "./brand.ts";
 
 /**
  * Module interface for modules to implement.
@@ -111,6 +112,12 @@ export interface Api
      * @alpha
      */
     readonly customComponents: CustomComponentsApi;
+
+    /**
+     * The branding API for customising window titles.
+     * @public
+     */
+    readonly brand: BrandApi;
 
     /**
      * Allows modules to render components that are part of Element Web.

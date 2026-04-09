@@ -44,6 +44,7 @@ export interface AliasCustomisations {
 //
 // @public
 export interface Api extends LegacyModuleApiExtension, LegacyCustomisationsApiExtension, DialogApiExtension, AccountAuthApiExtension, ProfileApiExtension {
+    readonly brand: BrandApi;
     // @alpha
     readonly builtins: BuiltinsApi;
     readonly client: ClientApi;
@@ -63,6 +64,11 @@ export interface Api extends LegacyModuleApiExtension, LegacyCustomisationsApiEx
     readonly widget: WidgetApi;
     // @alpha
     readonly widgetLifecycle: WidgetLifecycleApi;
+}
+
+// @public
+export interface BrandApi {
+    registerTitleRenderer(renderFunction: TitleRenderFunction): void;
 }
 
 // @alpha
@@ -445,6 +451,19 @@ export type SubstitutionValue = number | string | ReactNode | ((sub: string) => 
 
 // @public
 export type Tags = Record<string, SubstitutionValue>;
+
+// @public
+export type TitleRenderFunction = (opts: TitleRenderOptions) => string;
+
+// @public
+export type TitleRenderOptions = {
+    brand: string;
+    notificationCount?: number;
+    hasActivity?: boolean;
+    statusText?: string;
+    roomId?: string;
+    roomName?: string;
+};
 
 // @public
 export type Translations = Record<string, {
