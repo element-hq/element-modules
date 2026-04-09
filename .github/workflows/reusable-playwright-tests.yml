@@ -47,16 +47,11 @@ jobs:
               with:
                   name: ${{ inputs.webapp-artifact }}
                   path: webapp
-            - name: Run webapp
-              if: inputs.webapp-artifact
-              uses: Eun/http-server-action@f71cec1321f665652a46c40b6852f8e5a68bfcd4 # v1
-              with:
-                  directory: webapp
-                  port: 8080
-                  index-files: '["index.html"]'
 
             - name: Run Playwright tests
               run: yarn playwright test
+              env:
+                  WEBAPP_PATH: ${{ inputs.webapp-artifact && './webapp' || '' }}
 
             - name: Upload blob report to GitHub Actions Artifacts
               if: always()
