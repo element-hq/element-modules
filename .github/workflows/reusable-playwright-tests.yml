@@ -6,6 +6,10 @@ on:
                 required: false
                 description: Name of the artifact containing the webapp bundle to test, only intended for downstream testing from element-web.
                 type: string
+            reporter:
+                default: html
+                description: The reporter to use. `html` report will be uploaded as `playwright-html-report`, `blob` report will be uploaded as `blob-report-modules`.
+                type: string
 
 permissions: {}
 
@@ -49,14 +53,23 @@ jobs:
                   path: webapp
 
             - name: Run Playwright tests
-              run: yarn playwright test
+              run: yarn playwright test --reporter="$REPORTER"
               env:
+                  REPORTER: ${{ inputs.reporter }}
                   WEBAPP_PATH: ${{ inputs.webapp-artifact && './webapp' || '' }}
 
-            - name: Upload blob report to GitHub Actions Artifacts
-              if: always()
+            - name: Upload html report to GitHub Actions Artifacts
+              if: always() && inputs.reporter == 'html'
               uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
               with:
                   name: playwright-html-report
                   path: playwright-report
                   retention-days: 14
+
+            - name: Upload blob report to GitHub Actions Artifacts
+              if: always() && inputs.reporter == 'blob'
+              uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+              with:
+                  name: blob-report-modules
+                  path: blob-report
+                  retention-days: 1

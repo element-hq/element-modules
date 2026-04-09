@@ -47,3 +47,5 @@ jobs:
     playwright:
         name: Run Playwright end-to-end tests & upload html report
         uses: ./.github/workflows/reusable-playwright-tests.yml
+        with:
+            reporter: html
