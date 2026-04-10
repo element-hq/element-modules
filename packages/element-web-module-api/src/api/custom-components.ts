@@ -19,6 +19,12 @@ export type CustomMessageComponentProps = {
      * @alpha
      */
     mxEvent: MatrixEvent;
+    /**
+     * Whether this message is being rendered as a reply preview tile.
+     * Modules may choose to skip decorations (e.g. labels) in this context.
+     * @alpha
+     */
+    isReplyTile?: boolean;
 };
 
 /**
