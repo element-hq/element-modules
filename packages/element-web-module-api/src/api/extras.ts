@@ -84,6 +84,16 @@ export type EventContentTransformCallback = (
 ) => Record<string, unknown>;
 
 /**
+ * A callback that returns a JSX element to display in the Security & Privacy
+ * section of Room Settings.
+ *
+ * @alpha
+ * @param roomId - The ID of the room whose settings are being displayed.
+ * @returns A JSX element to render, or undefined if nothing should be shown.
+ */
+export type RoomSettingsSecurityCallback = (roomId: string) => JSX.Element | undefined;
+
+/**
  * API for inserting extra UI into Element Web.
  * @alpha Subject to change.
  */
@@ -145,4 +155,12 @@ export interface ExtrasApi {
      * @param cb - A callback that receives and returns event content (see {@link EventContentTransformCallback}).
      */
     addEncryptedEnvelopeTransformCallback(cb: EventContentTransformCallback): void;
+
+    /**
+     * Adds a callback to render a component in the Security & Privacy section
+     * of Room Settings, beneath the Encryption settings.
+     *
+     * @param cb - A callback that returns a JSX element (see {@link RoomSettingsSecurityCallback}).
+     */
+    addRoomSettingsSecurityCallback(cb: RoomSettingsSecurityCallback): void;
 }
