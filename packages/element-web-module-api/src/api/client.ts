@@ -43,4 +43,11 @@ export interface ClientApi {
      * @returns Room object from SDK
      */
     getRoom: (id: string) => Room | null;
+
+    /**
+     * Download the body of an `mxc://` URI via the authenticated media
+     * endpoint, returning the raw text. Use for small text/JSON/XML media
+     * (e.g. policy files) referenced by state events.
+     */
+    downloadMxc: (mxcUrl: string) => Promise<string>;
 }
