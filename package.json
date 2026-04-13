@@ -27,7 +27,7 @@
         "@action-validator/cli": "^0.6.0",
         "@action-validator/core": "^0.6.0",
         "@element-hq/element-web-module-api": "1.13.0",
-        "@element-hq/element-web-playwright-common": "*",
+        "@element-hq/element-web-playwright-common": "^3.0.0",
         "@playwright/test": "^1.52.0",
         "@stylistic/eslint-plugin": "^5.0.0",
         "@types/node": "^22.12.0",
