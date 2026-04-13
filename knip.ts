@@ -15,8 +15,8 @@ export default {
         // Needed for lint:workflows
         "@action-validator/cli",
         "@action-validator/core",
-        // Unlisted peer dependency for @matrix-org/react-sdk-module-api
-        "matrix-web-i18n",
+        // Unlisted peer dependency for @element-hq/element-web-module-api
+        "matrix-widget-api",
     ],
     ignoreBinaries: [
         // False positive for `yarn list`
