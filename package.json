@@ -26,7 +26,7 @@
     "devDependencies": {
         "@action-validator/cli": "^0.6.0",
         "@action-validator/core": "^0.6.0",
-        "@element-hq/element-web-module-api": "*",
+        "@element-hq/element-web-module-api": "1.13.0",
         "@element-hq/element-web-playwright-common": "*",
         "@playwright/test": "^1.52.0",
         "@stylistic/eslint-plugin": "^5.0.0",
