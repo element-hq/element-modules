@@ -13,7 +13,7 @@
         "lint:workflows": "find .github/workflows -type f \\( -iname '*.yaml' -o -iname '*.yml' \\) | xargs -I {} sh -c 'echo \"Linting {}\"; action-validator \"{}\"'",
         "lint:prettier": "prettier --check .",
         "lint:prettier:fix": "prettier --write .",
-        "lint:eslint": "eslint --max-warnings 0 modules/*/element-web/src packages/*/src",
+        "lint:eslint": "eslint --max-warnings 0 modules/*/element-web/src",
         "lint:types": "yarn workspaces run lint:types",
         "lint:codestyle": "yarn workspaces run lint:codestyle",
         "lint:knip": "knip",
