@@ -6,14 +6,13 @@ Please see LICENSE files in the repository root for full details.
 */
 
 import { test as base, expect, type TestFixtures } from "@element-hq/element-web-playwright-common";
-import { Locator, Page } from "@playwright/test";
 
 export interface Options {
     moduleDir: string;
     modules: string[];
 }
 
-export const test = base.extend<TestFixtures & Options & { toasts: Toasts }>({
+export const test = base.extend<TestFixtures & Options>({
     moduleDir: ["", { option: true }],
     modules: async ({ moduleDir }, use) => {
         await use([`${moduleDir}/lib/index.js`]);
@@ -31,38 +30,6 @@ export const test = base.extend<TestFixtures & Options & { toasts: Toasts }>({
 
         await use(page);
     },
-
-    toasts: async ({ page }, use) => {
-        await use(new Toasts(page));
-    },
 });
 
 export { expect };
-
-class Toasts {
-    public constructor(private readonly page: Page) {}
-
-    /**
-     * Find a toast with the given title, if it exists.
-     *
-     * @param title - title of the toast.
-     * @returns the Locator for the matching toast, or an empty locator if it
-     *          doesn't exist.
-     */
-    public getToastIfExists(title: string): Locator {
-        return this.page.locator(".mx_Toast_toast", { hasText: title }).first();
-    }
-
-    /**
-     * Reject a toast with the given title, if it exists. Only works for the
-     * first toast in the stack.
-     *
-     * @param title - title of the toast
-     */
-    public async rejectToastIfExists(title: string): Promise<void> {
-        const toast = this.getToastIfExists(title).locator('.mx_Toast_buttons button[data-kind="secondary"]');
-        if ((await toast.count()) > 0) {
-            await toast.click();
-        }
-    }
-}
