@@ -12,6 +12,7 @@ export type { I18nApi, Variables, Translations, SubstitutionValue, Tags } from "
 export type * from "./models/event";
 export type * from "./models/Room";
 export type * from "./api/custom-components";
+export type * from "./api/brand";
 export type * from "./api/extras";
 export type * from "./api/legacy-modules";
 export type * from "./api/legacy-customisations";
