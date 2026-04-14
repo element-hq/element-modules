@@ -38,7 +38,7 @@ target "_common" {
 
 target "_element_web_module_base" {
   inherits = ["_common"]
-  dockerfile = "./packages/element-web-module-api/Dockerfile"
+  dockerfile = "./Dockerfile"
 }
 
 target "element-web-modules-opendesk-plugin" {
