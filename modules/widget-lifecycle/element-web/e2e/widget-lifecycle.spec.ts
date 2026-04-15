@@ -64,8 +64,6 @@ test.describe("Widget Lifecycle", () => {
         });
 
         test("auto-approves preload and identity", async ({ page, user, homeserver, toasts }, testInfo) => {
-            toasts.rejectToastIfExists("Verify this device");
-
             // A bot creates a room with the widget pinned to the top panel, then invites the test user.
             // Because the widget was added by a different user (the bot), Element would normally show a
             // preload consent dialog before loading it — this test verifies that dialog is skipped.
@@ -106,6 +104,8 @@ test.describe("Widget Lifecycle", () => {
                 user_id: user.userId,
             });
 
+            toasts.rejectToastIfExists("Verify this device");
+
             await page.getByText("Trusted Widget").click();
             await page.getByRole("button", { name: "Accept" }).click();
 
@@ -122,8 +122,6 @@ test.describe("Widget Lifecycle", () => {
         });
 
         test("prompts for capabilities not in the allowlist", async ({ page, user, homeserver, toasts }, testInfo) => {
-            toasts.rejectToastIfExists("Verify this device");
-
             const bot = await homeserver.registerUser(`bot_${testInfo.testId}`, "password", "Bot");
             const { room_id: roomId } = await homeserver.csApi.request<{ room_id: string }>(
                 "POST",
@@ -162,6 +160,8 @@ test.describe("Widget Lifecycle", () => {
                 user_id: user.userId,
             });
 
+            toasts.rejectToastIfExists("Verify this device");
+
             await page.getByText("Capabilities Widget").click();
             await page.getByRole("button", { name: "Accept" }).click();
 
@@ -186,8 +186,6 @@ test.describe("Widget Lifecycle", () => {
             homeserver,
             toasts,
         }, testInfo) => {
-            toasts.rejectToastIfExists("Verify this device");
-
             const bot = await homeserver.registerUser(`bot_${testInfo.testId}`, "password", "Bot");
             const { room_id: roomId } = await homeserver.csApi.request<{ room_id: string }>(
                 "POST",
@@ -224,6 +222,8 @@ test.describe("Widget Lifecycle", () => {
             await homeserver.csApi.request("POST", `/v3/rooms/${encodeURIComponent(roomId)}/invite`, bot.accessToken, {
                 user_id: user.userId,
             });
+
+            toasts.rejectToastIfExists("Verify this device");
 
             await page.getByText("Untrusted Widget").click();
             await page.getByRole("button", { name: "Accept" }).click();
