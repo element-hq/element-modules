@@ -18,6 +18,12 @@ const chromeProject = {
     launchOptions: {
         args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream", "--mute-audio"],
     },
+    connectOptions: process.env.PW_TEST_CONNECT_WS_ENDPOINT
+        ? {
+              wsEndpoint: process.env.PW_TEST_CONNECT_WS_ENDPOINT,
+              exposeNetwork: "<loopback>",
+          }
+        : undefined,
 };
 
 /**
@@ -93,6 +99,7 @@ export default defineConfig<Options>({
               ["@element-hq/element-web-playwright-common/lib/stale-screenshot-reporter.js"],
           ]
         : [["list"], ["html", { outputFolder: "playwright-html-report" }]],
-    snapshotPathTemplate: "{snapshotDir}/{testFilePath}/{arg}-{platform}{ext}",
+    // When running the browser in docker, set the platform to `linux` as that is the platform where the browser is running
+    snapshotPathTemplate: `{snapshotDir}/{testFilePath}/{arg}-${process.env.PW_TEST_CONNECT_WS_ENDPOINT ? "linux" : "{platform}"}{ext}`,
     forbidOnly: !!process.env.CI,
 });
