@@ -1,5 +1,5 @@
 diff --git a/node_modules/@element-hq/element-web-playwright-common/playwright-screenshots.sh b/node_modules/@element-hq/element-web-playwright-common/playwright-screenshots.sh
-index ecf962f..f943512 100755
+index d860e34..d252f3a 100755
 --- a/node_modules/@element-hq/element-web-playwright-common/playwright-screenshots.sh
 +++ b/node_modules/@element-hq/element-web-playwright-common/playwright-screenshots.sh
 @@ -16,7 +16,7 @@ function build_image() {
@@ -14,9 +14,9 @@ index ecf962f..f943512 100755
 @@ -42,7 +42,7 @@ trap clean_up EXIT
  
  # Wait for playwright-server to be ready
- echo "Waiting for playwright-server"
+ echo "playwright-screenshots: Waiting for playwright-server"
 -pnpm --dir "$SCRIPT_DIR" exec wait-on "tcp:$WS_PORT"
 +npx -y wait-on "tcp:$WS_PORT"
  
- # Run the test we were given, setting PW_TEST_CONNECT_WS_ENDPOINT accordingly
- echo "Running '$@'"
+ # Playwright seems to overwrite the last line from the console, so add an
+ # extra newline to make sure this doesn't get lost.
