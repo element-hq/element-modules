@@ -51,5 +51,8 @@
         "prettier": "^3.4.2",
         "typescript": "^6.0.0"
     },
+    "resolutions": {
+        "vite": "7.3.5"
+    },
     "packageManager": "yarn@1.22.22"
 }
