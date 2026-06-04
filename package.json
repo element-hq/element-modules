@@ -52,7 +52,7 @@
         "typescript": "^6.0.0"
     },
     "resolutions": {
-        "vite": "7.3.5",
+        "vite": "8.0.15",
         "@vitest/browser-playwright": "4.1.8",
         "@vitest/coverage-v8": "4.1.8",
         "vitest": "4.1.8"
