@@ -150,9 +150,9 @@ coverage/
 **/test-results
 **/_results
 # Only commit snapshots from Linux
-**/tests/snapshots/**/*.png
-**/tests/snapshots/**/*.yml
-!**/tests/snapshots/**/*-linux.png
-!**/tests/snapshots/**/*-linux.aria.yml
+**/e2e/snapshots/**/*.png
+**/e2e/snapshots/**/*.yml
+!**/e2e/snapshots/**/*-linux.png
+!**/e2e/snapshots/**/*-linux.aria.yml
 /playwright-report/
 .DS_Store
