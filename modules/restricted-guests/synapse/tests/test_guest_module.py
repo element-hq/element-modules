@@ -198,8 +198,8 @@ class GuestModuleRuntimeTest(aiounittest.AsyncTestCase):
         module, _, _ = self.create_module()
 
         allow = await module.callback_user_may_invite(
-            "@my-user:matrix.local",
             "@inviter:matrix.local",
+            "@my-user:matrix.local",
             "!room:matrix.local",
         )
 
