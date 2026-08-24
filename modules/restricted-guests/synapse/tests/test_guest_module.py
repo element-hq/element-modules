@@ -43,6 +43,7 @@ class GuestModuleConfigTest(aiounittest.AsyncTestCase):
                 "display_name_suffix": " (Temporary)",
                 "enable_user_reaper": False,
                 "user_expiration_seconds": 100,
+                "rooms_forbidden_to_guests": ["!forbidden:matrix.local"],
             }
         )
 
@@ -54,6 +55,7 @@ class GuestModuleConfigTest(aiounittest.AsyncTestCase):
                 enable_user_reaper=False,
                 user_expiration_seconds=100,
                 mas=None,
+                rooms_forbidden_to_guests=frozenset({"!forbidden:matrix.local"}),
             ),
         )
 
@@ -112,6 +114,40 @@ class GuestModuleConfigTest(aiounittest.AsyncTestCase):
             GuestModule.parse_config(
                 {
                     "enable_user_reaper": "False",
+                }
+            )
+
+    async def test_parse_config_fail_rooms_forbidden_to_guests(self) -> None:
+        with self.assertRaisesRegex(
+            ConfigError,
+            "Config option 'rooms_forbidden_to_guests' must be a list of room IDs",
+        ):
+            GuestModule.parse_config(
+                {
+                    "rooms_forbidden_to_guests": ["!room:matrix.local", 1234],
+                }
+            )
+
+    async def test_parse_config_fail_rooms_forbidden_to_guests_alias(self) -> None:
+        with self.assertRaisesRegex(
+            ConfigError,
+            "Config option 'rooms_forbidden_to_guests' must be a list of room IDs "
+            "starting with '!'",
+        ):
+            GuestModule.parse_config(
+                {
+                    "rooms_forbidden_to_guests": ["#alias:matrix.local"],
+                }
+            )
+
+    async def test_parse_config_fail_rooms_forbidden_to_guests_not_a_list(self) -> None:
+        with self.assertRaisesRegex(
+            ConfigError,
+            "Config option 'rooms_forbidden_to_guests' must be a list of room IDs",
+        ):
+            GuestModule.parse_config(
+                {
+                    "rooms_forbidden_to_guests": "!room:matrix.local",
                 }
             )
 

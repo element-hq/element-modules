@@ -7,7 +7,7 @@
 # Originally licensed under the Apache License, Version 2.0:
 # <http://www.apache.org/licenses/LICENSE-2.0>.
 
-from typing import Optional
+from typing import FrozenSet, Optional
 
 import attr
 
@@ -28,3 +28,9 @@ class GuestModuleConfig:
     enable_user_reaper: bool
     user_expiration_seconds: int
     mas: Optional[MasConfig] = None
+    # Rooms guests must never be members of, such as an auto-join announcements room.
+    # Membership exposes the room's full member list over `/rooms/{roomId}/members`, so
+    # a guest in a server-wide room can enumerate every user — what hiding the user
+    # directory from guests is meant to prevent.
+    # Both invites of guests into these rooms and joins by guests are denied.
+    rooms_forbidden_to_guests: FrozenSet[str] = frozenset()

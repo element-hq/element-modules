@@ -111,6 +111,22 @@ class GuestModule:
                 "Config option 'user_expiration_seconds' must be a number"
             )
 
+        rooms_forbidden_to_guests = config.get("rooms_forbidden_to_guests", [])
+        if not isinstance(rooms_forbidden_to_guests, list):
+            raise ConfigError(
+                "Config option 'rooms_forbidden_to_guests' must be a list of room IDs"
+            )
+
+        for room_id in rooms_forbidden_to_guests:
+            # Aliases are rejected rather than resolved: `auto_join_rooms`, the option
+            # this one usually mirrors, takes aliases only, so an alias copied across
+            # would match no room and let guests in silently.
+            if not isinstance(room_id, str) or not room_id.startswith("!"):
+                raise ConfigError(
+                    "Config option 'rooms_forbidden_to_guests' must be a list of room "
+                    f"IDs starting with '!', got {room_id!r}"
+                )
+
         mas_config = config.get("mas")
         mas: Optional[MasConfig] = None
         if mas_config is not None:
@@ -182,6 +198,7 @@ class GuestModule:
             enable_user_reaper,
             user_expiration_seconds,
             mas,
+            frozenset(rooms_forbidden_to_guests),
         )
 
     async def profile_update(
