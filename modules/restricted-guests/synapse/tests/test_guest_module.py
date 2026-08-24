@@ -12,13 +12,15 @@ from unittest.mock import Mock
 
 import aiounittest
 from parameterized import parameterized_class  # type: ignore[import-untyped]
-from synapse.module_api import ProfileInfo, UserProfile
+from synapse.module_api import NOT_SPAM, ProfileInfo, UserProfile, errors
 from synapse.module_api.errors import ConfigError
 from synapse.types import UserID
 
 from synapse_guest_module.config import GuestModuleConfig, MasConfig
 from synapse_guest_module.guest_module import GuestModule
 from tests import SQLiteStore, create_module, mas_config_override
+
+FORBIDDEN_ROOM = "!forbidden:matrix.local"
 
 
 class GuestModuleConfigTest(aiounittest.AsyncTestCase):
@@ -173,6 +175,13 @@ class GuestModuleRuntimeTest(aiounittest.AsyncTestCase):
     def create_module(self) -> Tuple[GuestModule, Mock, SQLiteStore]:
         return create_module(self.config_override)
 
+    def create_module_with_forbidden_room(
+        self,
+    ) -> Tuple[GuestModule, Mock, SQLiteStore]:
+        config_override = dict(self.config_override or {})
+        config_override["rooms_forbidden_to_guests"] = [FORBIDDEN_ROOM]
+        return create_module(config_override)
+
     async def test_profile_update_no_guest(self) -> None:
         module, module_api, _ = self.create_module()
 
@@ -264,6 +273,106 @@ class GuestModuleRuntimeTest(aiounittest.AsyncTestCase):
         )
 
         self.assertTrue(allow)
+
+    async def test_callback_user_may_invite_guest_into_forbidden_room(self) -> None:
+        module, _, _ = self.create_module_with_forbidden_room()
+
+        allow = await module.callback_user_may_invite(
+            "@my-user:matrix.local",
+            "@guest-asdf:matrix.local",
+            FORBIDDEN_ROOM,
+        )
+
+        self.assertFalse(allow)
+
+    async def test_callback_user_may_invite_no_guest_into_forbidden_room(self) -> None:
+        module, _, _ = self.create_module_with_forbidden_room()
+
+        allow = await module.callback_user_may_invite(
+            "@my-user:matrix.local",
+            "@my-other-user:matrix.local",
+            FORBIDDEN_ROOM,
+        )
+
+        self.assertTrue(allow)
+
+    async def test_callback_user_may_invite_guest_inviter_in_forbidden_room(
+        self,
+    ) -> None:
+        module, _, _ = self.create_module_with_forbidden_room()
+
+        allow = await module.callback_user_may_invite(
+            "@guest-asdf:matrix.local",
+            "@my-user:matrix.local",
+            FORBIDDEN_ROOM,
+        )
+
+        self.assertFalse(allow)
+
+    async def test_callback_user_may_invite_guest_into_other_room(self) -> None:
+        module, _, _ = self.create_module_with_forbidden_room()
+
+        allow = await module.callback_user_may_invite(
+            "@my-user:matrix.local",
+            "@guest-asdf:matrix.local",
+            "!room:matrix.local",
+        )
+
+        self.assertTrue(allow)
+
+    async def test_callback_user_may_join_room_guest_forbidden_room_invited(
+        self,
+    ) -> None:
+        module, _, _ = self.create_module_with_forbidden_room()
+
+        result = await module.callback_user_may_join_room(
+            "@guest-asdf:matrix.local", FORBIDDEN_ROOM, True
+        )
+
+        self.assertEqual(result, errors.Codes.FORBIDDEN)
+
+    async def test_callback_user_may_join_room_guest_forbidden_room_not_invited(
+        self,
+    ) -> None:
+        module, module_api, _ = self.create_module_with_forbidden_room()
+
+        result = await module.callback_user_may_join_room(
+            "@guest-asdf:matrix.local", FORBIDDEN_ROOM, False
+        )
+
+        self.assertEqual(result, errors.Codes.FORBIDDEN)
+        # The room's join rules are never consulted: a forbidden room is refused even
+        # if it is a knock room.
+        module_api.get_state_events_in_room.assert_not_called()
+
+    async def test_callback_user_may_join_room_no_guest_forbidden_room(self) -> None:
+        module, _, _ = self.create_module_with_forbidden_room()
+
+        result = await module.callback_user_may_join_room(
+            "@my-user:matrix.local", FORBIDDEN_ROOM, False
+        )
+
+        self.assertEqual(result, NOT_SPAM)
+
+    async def test_callback_user_may_join_room_no_guest_forbidden_room_invited(
+        self,
+    ) -> None:
+        module, _, _ = self.create_module_with_forbidden_room()
+
+        result = await module.callback_user_may_join_room(
+            "@my-user:matrix.local", FORBIDDEN_ROOM, True
+        )
+
+        self.assertEqual(result, NOT_SPAM)
+
+    async def test_callback_user_may_join_room_guest_other_room_invited(self) -> None:
+        module, _, _ = self.create_module_with_forbidden_room()
+
+        result = await module.callback_user_may_join_room(
+            "@guest-asdf:matrix.local", "!room:matrix.local", True
+        )
+
+        self.assertEqual(result, NOT_SPAM)
 
     async def test_callback_check_username_for_spam_no_guest(self) -> None:
         module, _, _ = self.create_module()

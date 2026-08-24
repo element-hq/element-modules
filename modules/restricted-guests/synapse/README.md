@@ -43,6 +43,11 @@ The module provides (optional) configuration options:
 - `display_name_suffix` - the suffix added to the display name of guest users. Default: ` (Guest)`.
 - `enable_user_reaper` - if true, the module disables all users that are older than the configured expiration time. Default: `true`.
 - `user_expiration_seconds` - the expiration time in seconds when a guest user expires after their creation. Default: `86400` (=24 hours).
+- `rooms_forbidden_to_guests` - room IDs (not aliases — the module refuses aliases at startup) that guests must never be a member of, for example a hidden room that every user is auto-joined to. Guests are refused a join to these rooms even when they have been invited, and invites of guests into them are rejected. Default: `[]`.
+
+    This matters because membership of a room exposes its full member list over `/rooms/{roomId}/members`: a guest in a server-wide room can enumerate every user on the server, which is what hiding the user directory from guests is there to prevent. The join refusal is what enforces it — server admins bypass the invite check.
+
+    Denying an auto-join makes Synapse log an ERROR with a full traceback for each guest registration ("Failed to join new user to ..." naming the alias from `auto_join_rooms`). That is harmless: Synapse catches the failure per room, and registration still succeeds. When adopting `rooms_forbidden_to_guests` on an existing deployment, kick the guests that have already joined those rooms once; the option only prevents new joins.
 
 If matrix-authentication-service (MAS) is configured, the module will need to
 interface with it in order to register/deactivate users. Provide the below
@@ -64,6 +69,9 @@ modules:
       config:
           # Use a german suffix
           display_name_suffix: " (Gast)"
+          # Guests may never join these rooms, invited or not
+          rooms_forbidden_to_guests:
+              - "!allUsers:example.org"
           # The below is required if using MAS
           mas:
               admin_api_base_url: https://mas.example.org

@@ -278,10 +278,20 @@ class GuestModule:
         room_id: str,
     ) -> bool:
         """Returns whether this user is allowed to invite someone into a room.
-        Guest users should not be able to to that.
+        Guest users may not invite anyone, and nobody may invite a guest into a room
+        that is forbidden to guests.
+
+        Server admins bypass spam-checker callbacks entirely; the join check is what
+        enforces the forbidden-room property. Federated invites reach this callback
+        too, through Synapse's `federated_user_may_invite` fallback.
         """
-        user_is_guest = self._is_module_guest(inviter)
-        return not user_is_guest
+        if self._is_module_guest(inviter):
+            return False
+
+        if self._is_module_guest(invitee):
+            return room_id not in self._config.rooms_forbidden_to_guests
+
+        return True
 
     async def callback_user_may_join_room(
         self, user_id: str, room_id: str, is_invited: bool
@@ -289,9 +299,18 @@ class GuestModule:
         Literal["NOT_SPAM"], errors.Codes, Tuple[errors.Codes, Dict[str, Any]], bool
     ]:
         """Returns whether this user is allowed to join a room. Guest users
-        should only be able to do that if the room is Ask to Join (knock).
+        should only be able to do that if the room is Ask to Join (knock), and never
+        for a room that is forbidden to guests.
+
+        A forbidden room is refused even when `is_invited` is set: Synapse invites a
+        newly-registered user from `auto_join_user_id` before joining them to an
+        invite-only `auto_join_rooms` room, so honouring the invite here would let
+        every guest straight in.
         """
         user_is_guest = self._is_module_guest(user_id)
+        if user_is_guest and room_id in self._config.rooms_forbidden_to_guests:
+            return errors.Codes.FORBIDDEN
+
         if not user_is_guest or is_invited:
             return NOT_SPAM
 
