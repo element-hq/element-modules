@@ -1,3 +1,4 @@
+# Copyright 2025, 2026 Element Creations Ltd.
 # Copyright 2023 Nordeck IT + Consulting GmbH
 # Copyright 2025 New Vector Ltd.
 #
@@ -27,6 +28,7 @@ from synapse_guest_module.config import GuestModuleConfig, MasConfig
 from synapse_guest_module.guest_registration_servlet import GuestRegistrationServlet
 from synapse_guest_module.guest_user_reaper import GuestUserReaper
 from synapse_guest_module.mas_admin_client import MasAdminClient
+from synapse_guest_module.room_list_patch import patch_room_list_handler
 
 logger = logging.getLogger("synapse.contrib." + __name__)
 
@@ -36,6 +38,9 @@ class GuestModule:
         self._api = api
         self._config = config
         self._mas_tables_ready: asyncio.Event | None = None
+
+        if config.hide_room_directory_from_guests:
+            patch_room_list_handler(api, self._is_module_guest)
 
         mas_admin_client = (
             MasAdminClient(api, config.mas) if config.mas is not None else None
@@ -109,6 +114,14 @@ class GuestModule:
         if not isinstance(user_expiration_seconds, int):
             raise ConfigError(
                 "Config option 'user_expiration_seconds' must be a number"
+            )
+
+        hide_room_directory_from_guests = config.get(
+            "hide_room_directory_from_guests", False
+        )
+        if not isinstance(hide_room_directory_from_guests, bool):
+            raise ConfigError(
+                "Config option 'hide_room_directory_from_guests' must be a bool"
             )
 
         rooms_forbidden_to_guests = config.get("rooms_forbidden_to_guests", [])
@@ -198,6 +211,7 @@ class GuestModule:
             enable_user_reaper,
             user_expiration_seconds,
             mas,
+            hide_room_directory_from_guests,
             frozenset(rooms_forbidden_to_guests),
         )
 

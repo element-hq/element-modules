@@ -1,3 +1,4 @@
+# Copyright 2025, 2026 Element Creations Ltd.
 # Copyright 2023 Nordeck IT + Consulting GmbH
 # Copyright 2025 New Vector Ltd.
 #
@@ -28,6 +29,9 @@ class GuestModuleConfig:
     enable_user_reaper: bool
     user_expiration_seconds: int
     mas: Optional[MasConfig] = None
+    # Whether to monkey-patch RoomListHandler so guests get an empty room directory;
+    # see room_list_patch.py for why this defaults to false.
+    hide_room_directory_from_guests: bool = False
     # Rooms guests must never be members of, such as an auto-join announcements room.
     # Membership exposes the room's full member list over `/rooms/{roomId}/members`, so
     # a guest in a server-wide room can enumerate every user — what hiding the user
