@@ -232,40 +232,73 @@ class GuestModuleRuntimeTest(aiounittest.AsyncTestCase):
     async def test_callback_check_username_for_spam_no_guest(self) -> None:
         module, _, _ = self.create_module()
 
-        allow = await module.callback_check_username_for_spam(
+        hidden = await module.callback_check_username_for_spam(
             UserProfile(
                 user_id="@my-user:matrix.local",
                 display_name=None,
                 avatar_url=None,
             ),
+            "@my-other-user:matrix.local",
         )
 
-        self.assertFalse(allow)
+        self.assertFalse(hidden)
 
     async def test_callback_check_username_for_spam_guest(self) -> None:
         module, _, _ = self.create_module()
 
-        allow = await module.callback_check_username_for_spam(
+        hidden = await module.callback_check_username_for_spam(
             UserProfile(
                 user_id="@guest-asdf:matrix.local",
                 display_name=None,
                 avatar_url=None,
             ),
+            "@my-user:matrix.local",
         )
 
-        self.assertTrue(allow)
+        self.assertTrue(hidden)
 
     async def test_callback_check_username_for_spam_remote_guest_lookalike(
         self,
     ) -> None:
         module, _, _ = self.create_module()
 
-        is_spam = await module.callback_check_username_for_spam(
+        hidden = await module.callback_check_username_for_spam(
             UserProfile(
                 user_id="@guest-asdf:other.local",
                 display_name=None,
                 avatar_url=None,
             ),
+            "@my-user:matrix.local",
         )
 
-        self.assertFalse(is_spam)
+        self.assertFalse(hidden)
+
+    async def test_callback_check_username_for_spam_guest_requester(self) -> None:
+        module, _, _ = self.create_module()
+
+        hidden = await module.callback_check_username_for_spam(
+            UserProfile(
+                user_id="@my-user:matrix.local",
+                display_name=None,
+                avatar_url=None,
+            ),
+            "@guest-asdf:matrix.local",
+        )
+
+        self.assertTrue(hidden)
+
+    async def test_callback_check_username_for_spam_remote_guest_lookalike_requester(
+        self,
+    ) -> None:
+        module, _, _ = self.create_module()
+
+        hidden = await module.callback_check_username_for_spam(
+            UserProfile(
+                user_id="@my-user:matrix.local",
+                display_name=None,
+                avatar_url=None,
+            ),
+            "@guest-asdf:other.local",
+        )
+
+        self.assertFalse(hidden)

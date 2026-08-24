@@ -7,7 +7,7 @@ A [pluggable synapse module](https://element-hq.github.io/synapse/latest/modules
 1. Provides an endpoint that creates temporary users with a same pattern (default: `guest-[randomstring]`).
 2. The temporary users have a mandatory displayname suffix (default: ` (Guest)`) that they can't remove from their profile.
 3. The temporary users are limited in what they can do (examples: create room, invite users).
-4. The temporary users won't be returned by the user directory search results.
+4. The temporary users won't be returned by the user directory search results, and the temporary users themselves get an empty user directory: they should not be handed a browsable index of users they have no relationship with.
 5. The temporary users are disabled after an expiration timeout (default: `24 hours`).
 
 ## Synapse configuration

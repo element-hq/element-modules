@@ -292,9 +292,23 @@ class GuestModule:
 
         return errors.Codes.FORBIDDEN
 
-    async def callback_check_username_for_spam(self, user_profile: UserProfile) -> bool:
-        """Returns whether this user should appear in the user directory. Since
-        we prefer to not invite guests into normal rooms, we hide them here.
+    async def callback_check_username_for_spam(
+        self, user_profile: UserProfile, requester_id: str
+    ) -> bool:
+        """Returns whether to hide this profile from the user directory. Guests are
+        hidden from everybody, and guests are shown an empty directory.
+
+        The two-parameter signature is the contract with Synapse: it dispatches this
+        callback by arity, and only passes `requester_id` to a two-parameter one.
         """
-        user_is_guest = self._is_module_guest(user_profile["user_id"])
-        return user_is_guest
+        # Native Matrix guests never reach this callback, since the user directory
+        # servlet rejects them, so matching the prefix identifies every requester that
+        # must be given an empty directory.
+        #
+        # `limited` is computed from the SQL LIMIT before Synapse filters on this
+        # callback, so a guest can get `limited: true` alongside an empty result list.
+        # Clients render that as an ordinary empty result.
+        if self._is_module_guest(requester_id):
+            return True
+
+        return self._is_module_guest(user_profile["user_id"])
