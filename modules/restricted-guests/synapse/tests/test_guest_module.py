@@ -216,6 +216,19 @@ class GuestModuleRuntimeTest(aiounittest.AsyncTestCase):
 
         self.assertFalse(allow)
 
+    async def test_callback_user_may_invite_remote_guest_lookalike(self) -> None:
+        module, _, _ = self.create_module()
+
+        # A federated invite reaches this callback with a remote sender; a remote
+        # `@guest-*` user is not one of ours.
+        allow = await module.callback_user_may_invite(
+            "@guest-asdf:other.local",
+            "@my-user:matrix.local",
+            "!room:matrix.local",
+        )
+
+        self.assertTrue(allow)
+
     async def test_callback_check_username_for_spam_no_guest(self) -> None:
         module, _, _ = self.create_module()
 
@@ -241,3 +254,18 @@ class GuestModuleRuntimeTest(aiounittest.AsyncTestCase):
         )
 
         self.assertTrue(allow)
+
+    async def test_callback_check_username_for_spam_remote_guest_lookalike(
+        self,
+    ) -> None:
+        module, _, _ = self.create_module()
+
+        is_spam = await module.callback_check_username_for_spam(
+            UserProfile(
+                user_id="@guest-asdf:other.local",
+                display_name=None,
+                avatar_url=None,
+            ),
+        )
+
+        self.assertFalse(is_spam)

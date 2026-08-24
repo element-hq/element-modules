@@ -74,6 +74,18 @@ class GuestModule:
                 bg_start_span=False,
             )
 
+    def _is_module_guest(self, user_id: str) -> bool:
+        """Whether this user is a guest managed by this module.
+
+        Guests are registered by this module, so only a local user can be one; a remote
+        user whose localpart happens to start with the prefix is not ours. Raises on a
+        string that is not a valid user ID.
+        """
+        user = UserID.from_string(user_id)
+        return self._api.is_mine(user) and user.localpart.startswith(
+            self._config.user_id_prefix
+        )
+
     @staticmethod
     def parse_config(config: Dict[str, Any]) -> GuestModuleConfig:
         """Parse the module configuration"""
@@ -183,7 +195,7 @@ class GuestModule:
         always contains the configured suffix (default ` (Guest)`) and add it if
         it is missing.
         """
-        user_is_guest = user_id.startswith("@" + self._config.user_id_prefix)
+        user_is_guest = self._is_module_guest(user_id)
         if user_is_guest:
             new_profile_display_name = (
                 "" if new_profile.display_name is None else new_profile.display_name
@@ -239,7 +251,7 @@ class GuestModule:
         """Returns whether this user is allowed to create a room. Guest users
         should not be able to do that.
         """
-        user_is_guest = user_id.startswith("@" + self._config.user_id_prefix)
+        user_is_guest = self._is_module_guest(user_id)
         return not user_is_guest
 
     async def callback_user_may_invite(
@@ -251,7 +263,7 @@ class GuestModule:
         """Returns whether this user is allowed to invite someone into a room.
         Guest users should not be able to to that.
         """
-        user_is_guest = inviter.startswith("@" + self._config.user_id_prefix)
+        user_is_guest = self._is_module_guest(inviter)
         return not user_is_guest
 
     async def callback_user_may_join_room(
@@ -262,7 +274,7 @@ class GuestModule:
         """Returns whether this user is allowed to join a room. Guest users
         should only be able to do that if the room is Ask to Join (knock).
         """
-        user_is_guest = user_id.startswith("@" + self._config.user_id_prefix)
+        user_is_guest = self._is_module_guest(user_id)
         if not user_is_guest or is_invited:
             return NOT_SPAM
 
@@ -284,7 +296,5 @@ class GuestModule:
         """Returns whether this user should appear in the user directory. Since
         we prefer to not invite guests into normal rooms, we hide them here.
         """
-        user_is_guest = user_profile["user_id"].startswith(
-            "@" + self._config.user_id_prefix
-        )
+        user_is_guest = self._is_module_guest(user_profile["user_id"])
         return user_is_guest
