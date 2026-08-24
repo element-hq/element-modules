@@ -16,6 +16,9 @@ This modules requires that the homeserver has the following configuration in the
 
 ```yaml
 # Required so Element is able to show the room preview where the user can login.
+# Only applies to legacy deployments that have not delegated authentication to
+# matrix-authentication-service: under MAS this option is inert, and the guest login
+# flow it enables does not exist.
 allow_guest_access: true
 ```
 
