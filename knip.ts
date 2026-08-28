@@ -15,16 +15,5 @@ export default {
         // Needed for lint:workflows
         "@action-validator/cli",
         "@action-validator/core",
-        // Unlisted peer dependency for @element-hq/element-web-module-api
-        "matrix-widget-api",
     ],
-    ignoreBinaries: [
-        // False positive for `yarn list`
-        "list",
-    ],
-    workspaces: {
-        "modules/*/element-web": {
-            entry: "src/index.ts{x,}",
-        },
-    },
 } satisfies KnipConfig;
