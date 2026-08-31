@@ -74,6 +74,18 @@ class GuestModule:
                 bg_start_span=False,
             )
 
+    def _is_module_guest(self, user_id: str) -> bool:
+        """Whether this user is a guest managed by this module.
+
+        Guests are registered by this module, so only a local user can be one; a remote
+        user whose localpart happens to start with the prefix is not ours. Raises on a
+        string that is not a valid user ID.
+        """
+        user = UserID.from_string(user_id)
+        return self._api.is_mine(user) and user.localpart.startswith(
+            self._config.user_id_prefix
+        )
+
     @staticmethod
     def parse_config(config: Dict[str, Any]) -> GuestModuleConfig:
         """Parse the module configuration"""
@@ -98,6 +110,22 @@ class GuestModule:
             raise ConfigError(
                 "Config option 'user_expiration_seconds' must be a number"
             )
+
+        rooms_forbidden_to_guests = config.get("rooms_forbidden_to_guests", [])
+        if not isinstance(rooms_forbidden_to_guests, list):
+            raise ConfigError(
+                "Config option 'rooms_forbidden_to_guests' must be a list of room IDs"
+            )
+
+        for room_id in rooms_forbidden_to_guests:
+            # Aliases are rejected rather than resolved: `auto_join_rooms`, the option
+            # this one usually mirrors, takes aliases only, so an alias copied across
+            # would match no room and let guests in silently.
+            if not isinstance(room_id, str) or not room_id.startswith("!"):
+                raise ConfigError(
+                    "Config option 'rooms_forbidden_to_guests' must be a list of room "
+                    f"IDs starting with '!', got {room_id!r}"
+                )
 
         mas_config = config.get("mas")
         mas: Optional[MasConfig] = None
@@ -170,6 +198,7 @@ class GuestModule:
             enable_user_reaper,
             user_expiration_seconds,
             mas,
+            frozenset(rooms_forbidden_to_guests),
         )
 
     async def profile_update(
@@ -183,7 +212,7 @@ class GuestModule:
         always contains the configured suffix (default ` (Guest)`) and add it if
         it is missing.
         """
-        user_is_guest = user_id.startswith("@" + self._config.user_id_prefix)
+        user_is_guest = self._is_module_guest(user_id)
         if user_is_guest:
             new_profile_display_name = (
                 "" if new_profile.display_name is None else new_profile.display_name
@@ -239,7 +268,7 @@ class GuestModule:
         """Returns whether this user is allowed to create a room. Guest users
         should not be able to do that.
         """
-        user_is_guest = user_id.startswith("@" + self._config.user_id_prefix)
+        user_is_guest = self._is_module_guest(user_id)
         return not user_is_guest
 
     async def callback_user_may_invite(
@@ -249,10 +278,20 @@ class GuestModule:
         room_id: str,
     ) -> bool:
         """Returns whether this user is allowed to invite someone into a room.
-        Guest users should not be able to to that.
+        Guest users may not invite anyone, and nobody may invite a guest into a room
+        that is forbidden to guests.
+
+        Server admins bypass spam-checker callbacks entirely; the join check is what
+        enforces the forbidden-room property. Federated invites reach this callback
+        too, through Synapse's `federated_user_may_invite` fallback.
         """
-        user_is_guest = inviter.startswith("@" + self._config.user_id_prefix)
-        return not user_is_guest
+        if self._is_module_guest(inviter):
+            return False
+
+        if self._is_module_guest(invitee):
+            return room_id not in self._config.rooms_forbidden_to_guests
+
+        return True
 
     async def callback_user_may_join_room(
         self, user_id: str, room_id: str, is_invited: bool
@@ -260,9 +299,18 @@ class GuestModule:
         Literal["NOT_SPAM"], errors.Codes, Tuple[errors.Codes, Dict[str, Any]], bool
     ]:
         """Returns whether this user is allowed to join a room. Guest users
-        should only be able to do that if the room is Ask to Join (knock).
+        should only be able to do that if the room is Ask to Join (knock), and never
+        for a room that is forbidden to guests.
+
+        A forbidden room is refused even when `is_invited` is set: Synapse invites a
+        newly-registered user from `auto_join_user_id` before joining them to an
+        invite-only `auto_join_rooms` room, so honouring the invite here would let
+        every guest straight in.
         """
-        user_is_guest = user_id.startswith("@" + self._config.user_id_prefix)
+        user_is_guest = self._is_module_guest(user_id)
+        if user_is_guest and room_id in self._config.rooms_forbidden_to_guests:
+            return errors.Codes.FORBIDDEN
+
         if not user_is_guest or is_invited:
             return NOT_SPAM
 
@@ -280,11 +328,23 @@ class GuestModule:
 
         return errors.Codes.FORBIDDEN
 
-    async def callback_check_username_for_spam(self, user_profile: UserProfile) -> bool:
-        """Returns whether this user should appear in the user directory. Since
-        we prefer to not invite guests into normal rooms, we hide them here.
+    async def callback_check_username_for_spam(
+        self, user_profile: UserProfile, requester_id: str
+    ) -> bool:
+        """Returns whether to hide this profile from the user directory. Guests are
+        hidden from everybody, and guests are shown an empty directory.
+
+        The two-parameter signature is the contract with Synapse: it dispatches this
+        callback by arity, and only passes `requester_id` to a two-parameter one.
         """
-        user_is_guest = user_profile["user_id"].startswith(
-            "@" + self._config.user_id_prefix
-        )
-        return user_is_guest
+        # Native Matrix guests never reach this callback, since the user directory
+        # servlet rejects them, so matching the prefix identifies every requester that
+        # must be given an empty directory.
+        #
+        # `limited` is computed from the SQL LIMIT before Synapse filters on this
+        # callback, so a guest can get `limited: true` alongside an empty result list.
+        # Clients render that as an ordinary empty result.
+        if self._is_module_guest(requester_id):
+            return True
+
+        return self._is_module_guest(user_profile["user_id"])

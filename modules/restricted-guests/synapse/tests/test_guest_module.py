@@ -12,13 +12,15 @@ from unittest.mock import Mock
 
 import aiounittest
 from parameterized import parameterized_class  # type: ignore[import-untyped]
-from synapse.module_api import ProfileInfo, UserProfile
+from synapse.module_api import NOT_SPAM, ProfileInfo, UserProfile, errors
 from synapse.module_api.errors import ConfigError
 from synapse.types import UserID
 
 from synapse_guest_module.config import GuestModuleConfig, MasConfig
 from synapse_guest_module.guest_module import GuestModule
 from tests import SQLiteStore, create_module, mas_config_override
+
+FORBIDDEN_ROOM = "!forbidden:matrix.local"
 
 
 class GuestModuleConfigTest(aiounittest.AsyncTestCase):
@@ -43,6 +45,7 @@ class GuestModuleConfigTest(aiounittest.AsyncTestCase):
                 "display_name_suffix": " (Temporary)",
                 "enable_user_reaper": False,
                 "user_expiration_seconds": 100,
+                "rooms_forbidden_to_guests": ["!forbidden:matrix.local"],
             }
         )
 
@@ -54,6 +57,7 @@ class GuestModuleConfigTest(aiounittest.AsyncTestCase):
                 enable_user_reaper=False,
                 user_expiration_seconds=100,
                 mas=None,
+                rooms_forbidden_to_guests=frozenset({"!forbidden:matrix.local"}),
             ),
         )
 
@@ -115,6 +119,40 @@ class GuestModuleConfigTest(aiounittest.AsyncTestCase):
                 }
             )
 
+    async def test_parse_config_fail_rooms_forbidden_to_guests(self) -> None:
+        with self.assertRaisesRegex(
+            ConfigError,
+            "Config option 'rooms_forbidden_to_guests' must be a list of room IDs",
+        ):
+            GuestModule.parse_config(
+                {
+                    "rooms_forbidden_to_guests": ["!room:matrix.local", 1234],
+                }
+            )
+
+    async def test_parse_config_fail_rooms_forbidden_to_guests_alias(self) -> None:
+        with self.assertRaisesRegex(
+            ConfigError,
+            "Config option 'rooms_forbidden_to_guests' must be a list of room IDs "
+            "starting with '!'",
+        ):
+            GuestModule.parse_config(
+                {
+                    "rooms_forbidden_to_guests": ["#alias:matrix.local"],
+                }
+            )
+
+    async def test_parse_config_fail_rooms_forbidden_to_guests_not_a_list(self) -> None:
+        with self.assertRaisesRegex(
+            ConfigError,
+            "Config option 'rooms_forbidden_to_guests' must be a list of room IDs",
+        ):
+            GuestModule.parse_config(
+                {
+                    "rooms_forbidden_to_guests": "!room:matrix.local",
+                }
+            )
+
     async def test_parse_config_fail_user_expiration_seconds(self) -> None:
         with self.assertRaisesRegex(
             ConfigError, "Config option 'user_expiration_seconds' must be a number"
@@ -136,6 +174,13 @@ class GuestModuleConfigTest(aiounittest.AsyncTestCase):
 class GuestModuleRuntimeTest(aiounittest.AsyncTestCase):
     def create_module(self) -> Tuple[GuestModule, Mock, SQLiteStore]:
         return create_module(self.config_override)
+
+    def create_module_with_forbidden_room(
+        self,
+    ) -> Tuple[GuestModule, Mock, SQLiteStore]:
+        config_override = dict(self.config_override or {})
+        config_override["rooms_forbidden_to_guests"] = [FORBIDDEN_ROOM]
+        return create_module(config_override)
 
     async def test_profile_update_no_guest(self) -> None:
         module, module_api, _ = self.create_module()
@@ -198,8 +243,8 @@ class GuestModuleRuntimeTest(aiounittest.AsyncTestCase):
         module, _, _ = self.create_module()
 
         allow = await module.callback_user_may_invite(
-            "@my-user:matrix.local",
             "@inviter:matrix.local",
+            "@my-user:matrix.local",
             "!room:matrix.local",
         )
 
@@ -216,28 +261,189 @@ class GuestModuleRuntimeTest(aiounittest.AsyncTestCase):
 
         self.assertFalse(allow)
 
+    async def test_callback_user_may_invite_remote_guest_lookalike(self) -> None:
+        module, _, _ = self.create_module()
+
+        # A federated invite reaches this callback with a remote sender; a remote
+        # `@guest-*` user is not one of ours.
+        allow = await module.callback_user_may_invite(
+            "@guest-asdf:other.local",
+            "@my-user:matrix.local",
+            "!room:matrix.local",
+        )
+
+        self.assertTrue(allow)
+
+    async def test_callback_user_may_invite_guest_into_forbidden_room(self) -> None:
+        module, _, _ = self.create_module_with_forbidden_room()
+
+        allow = await module.callback_user_may_invite(
+            "@my-user:matrix.local",
+            "@guest-asdf:matrix.local",
+            FORBIDDEN_ROOM,
+        )
+
+        self.assertFalse(allow)
+
+    async def test_callback_user_may_invite_no_guest_into_forbidden_room(self) -> None:
+        module, _, _ = self.create_module_with_forbidden_room()
+
+        allow = await module.callback_user_may_invite(
+            "@my-user:matrix.local",
+            "@my-other-user:matrix.local",
+            FORBIDDEN_ROOM,
+        )
+
+        self.assertTrue(allow)
+
+    async def test_callback_user_may_invite_guest_inviter_in_forbidden_room(
+        self,
+    ) -> None:
+        module, _, _ = self.create_module_with_forbidden_room()
+
+        allow = await module.callback_user_may_invite(
+            "@guest-asdf:matrix.local",
+            "@my-user:matrix.local",
+            FORBIDDEN_ROOM,
+        )
+
+        self.assertFalse(allow)
+
+    async def test_callback_user_may_invite_guest_into_other_room(self) -> None:
+        module, _, _ = self.create_module_with_forbidden_room()
+
+        allow = await module.callback_user_may_invite(
+            "@my-user:matrix.local",
+            "@guest-asdf:matrix.local",
+            "!room:matrix.local",
+        )
+
+        self.assertTrue(allow)
+
+    async def test_callback_user_may_join_room_guest_forbidden_room_invited(
+        self,
+    ) -> None:
+        module, _, _ = self.create_module_with_forbidden_room()
+
+        result = await module.callback_user_may_join_room(
+            "@guest-asdf:matrix.local", FORBIDDEN_ROOM, True
+        )
+
+        self.assertEqual(result, errors.Codes.FORBIDDEN)
+
+    async def test_callback_user_may_join_room_guest_forbidden_room_not_invited(
+        self,
+    ) -> None:
+        module, module_api, _ = self.create_module_with_forbidden_room()
+
+        result = await module.callback_user_may_join_room(
+            "@guest-asdf:matrix.local", FORBIDDEN_ROOM, False
+        )
+
+        self.assertEqual(result, errors.Codes.FORBIDDEN)
+        # The room's join rules are never consulted: a forbidden room is refused even
+        # if it is a knock room.
+        module_api.get_state_events_in_room.assert_not_called()
+
+    async def test_callback_user_may_join_room_no_guest_forbidden_room(self) -> None:
+        module, _, _ = self.create_module_with_forbidden_room()
+
+        result = await module.callback_user_may_join_room(
+            "@my-user:matrix.local", FORBIDDEN_ROOM, False
+        )
+
+        self.assertEqual(result, NOT_SPAM)
+
+    async def test_callback_user_may_join_room_no_guest_forbidden_room_invited(
+        self,
+    ) -> None:
+        module, _, _ = self.create_module_with_forbidden_room()
+
+        result = await module.callback_user_may_join_room(
+            "@my-user:matrix.local", FORBIDDEN_ROOM, True
+        )
+
+        self.assertEqual(result, NOT_SPAM)
+
+    async def test_callback_user_may_join_room_guest_other_room_invited(self) -> None:
+        module, _, _ = self.create_module_with_forbidden_room()
+
+        result = await module.callback_user_may_join_room(
+            "@guest-asdf:matrix.local", "!room:matrix.local", True
+        )
+
+        self.assertEqual(result, NOT_SPAM)
+
     async def test_callback_check_username_for_spam_no_guest(self) -> None:
         module, _, _ = self.create_module()
 
-        allow = await module.callback_check_username_for_spam(
+        hidden = await module.callback_check_username_for_spam(
             UserProfile(
                 user_id="@my-user:matrix.local",
                 display_name=None,
                 avatar_url=None,
             ),
+            "@my-other-user:matrix.local",
         )
 
-        self.assertFalse(allow)
+        self.assertFalse(hidden)
 
     async def test_callback_check_username_for_spam_guest(self) -> None:
         module, _, _ = self.create_module()
 
-        allow = await module.callback_check_username_for_spam(
+        hidden = await module.callback_check_username_for_spam(
             UserProfile(
                 user_id="@guest-asdf:matrix.local",
                 display_name=None,
                 avatar_url=None,
             ),
+            "@my-user:matrix.local",
         )
 
-        self.assertTrue(allow)
+        self.assertTrue(hidden)
+
+    async def test_callback_check_username_for_spam_remote_guest_lookalike(
+        self,
+    ) -> None:
+        module, _, _ = self.create_module()
+
+        hidden = await module.callback_check_username_for_spam(
+            UserProfile(
+                user_id="@guest-asdf:other.local",
+                display_name=None,
+                avatar_url=None,
+            ),
+            "@my-user:matrix.local",
+        )
+
+        self.assertFalse(hidden)
+
+    async def test_callback_check_username_for_spam_guest_requester(self) -> None:
+        module, _, _ = self.create_module()
+
+        hidden = await module.callback_check_username_for_spam(
+            UserProfile(
+                user_id="@my-user:matrix.local",
+                display_name=None,
+                avatar_url=None,
+            ),
+            "@guest-asdf:matrix.local",
+        )
+
+        self.assertTrue(hidden)
+
+    async def test_callback_check_username_for_spam_remote_guest_lookalike_requester(
+        self,
+    ) -> None:
+        module, _, _ = self.create_module()
+
+        hidden = await module.callback_check_username_for_spam(
+            UserProfile(
+                user_id="@my-user:matrix.local",
+                display_name=None,
+                avatar_url=None,
+            ),
+            "@guest-asdf:other.local",
+        )
+
+        self.assertFalse(hidden)

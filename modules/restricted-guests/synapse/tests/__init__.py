@@ -9,16 +9,19 @@
 
 import sqlite3
 from asyncio import Future
-from typing import Any, Awaitable, Callable, Dict, Tuple, TypeVar
+from typing import Any, Awaitable, Callable, Dict, Tuple, TypeVar, Union
 from unittest.mock import Mock
 
 from synapse.http.client import SimpleHttpClient
 from synapse.module_api import ModuleApi
+from synapse.types import DomainSpecificString
 
 from synapse_guest_module import GuestModule
 
 RV = TypeVar("RV")
 TV = TypeVar("TV")
+
+SERVER_NAME = "matrix.local"
 
 
 class SQLiteStore:
@@ -85,6 +88,18 @@ def get_qualified_user_id(username: str) -> str:
     return f"@{username}:matrix.local"
 
 
+def is_mine(id: Union[str, DomainSpecificString]) -> bool:
+    """Mirrors `ModuleApi.is_mine`: a parsed ID compares its domain, and a raw string
+    goes through `HomeServer.is_mine_id`, which returns False rather than raising on a
+    malformed ID."""
+    if isinstance(id, DomainSpecificString):
+        return id.domain == SERVER_NAME
+    localpart_hostname = id.split(":", 1)
+    if len(localpart_hostname) < 2:
+        return False
+    return localpart_hostname[1] == SERVER_NAME
+
+
 async def register_user(localpart: str, admin: bool = False) -> str:
     return f"@{localpart}:matrix.local"
 
@@ -102,10 +117,11 @@ def create_module(
     # because some capabilities are needed for running the tests.
     module_api = Mock(spec=ModuleApi)
     module_api.http_client = client
-    module_api.server_name = "matrix.local"
+    module_api.server_name = SERVER_NAME
     module_api.public_baseurl = "https://matrix.local:1234/"
     module_api.run_db_interaction.side_effect = store.run_db_interaction
     module_api.get_qualified_user_id.side_effect = get_qualified_user_id
+    module_api.is_mine.side_effect = is_mine
     module_api.check_user_exists.return_value = make_awaitable(False)
     module_api.register_user.side_effect = register_user
     module_api.register_device.return_value = make_awaitable(
