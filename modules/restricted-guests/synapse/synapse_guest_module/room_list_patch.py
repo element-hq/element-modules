@@ -10,8 +10,7 @@ from typing import Any, Callable, Coroutine
 
 import attr
 
-# The logging context is not part of the module API surface; reading the requester
-# from it is the same private-internals reach as the patch itself.
+# Not re-exported by synapse.module_api.
 from synapse.logging.context import ContextRequest, current_context
 from synapse.module_api import JsonDict, ModuleApi, UserID
 from synapse.module_api.errors import ConfigError, SynapseError
