@@ -1,3 +1,4 @@
+# Copyright 2025, 2026 Element Creations Ltd.
 # Copyright 2023 Nordeck IT + Consulting GmbH
 # Copyright 2025 New Vector Ltd.
 #
@@ -116,6 +117,17 @@ class GuestModuleConfigTest(aiounittest.AsyncTestCase):
             GuestModule.parse_config(
                 {
                     "enable_user_reaper": "False",
+                }
+            )
+
+    async def test_parse_config_fail_hide_room_directory_from_guests(self) -> None:
+        with self.assertRaisesRegex(
+            ConfigError,
+            "Config option 'hide_room_directory_from_guests' must be a bool",
+        ):
+            GuestModule.parse_config(
+                {
+                    "hide_room_directory_from_guests": "False",
                 }
             )
 
