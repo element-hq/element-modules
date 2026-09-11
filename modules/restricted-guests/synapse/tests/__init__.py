@@ -1,3 +1,4 @@
+# Copyright 2025, 2026 Element Creations Ltd.
 # Copyright 2023 Nordeck IT + Consulting GmbH
 # Copyright 2025 New Vector Ltd.
 #
@@ -9,16 +10,19 @@
 
 import sqlite3
 from asyncio import Future
-from typing import Any, Awaitable, Callable, Dict, Tuple, TypeVar
+from typing import Any, Awaitable, Callable, Dict, List, Tuple, TypeVar, Union
 from unittest.mock import Mock
 
 from synapse.http.client import SimpleHttpClient
 from synapse.module_api import ModuleApi
+from synapse.types import DomainSpecificString
 
 from synapse_guest_module import GuestModule
 
 RV = TypeVar("RV")
 TV = TypeVar("TV")
+
+SERVER_NAME = "matrix.local"
 
 
 class SQLiteStore:
@@ -85,8 +89,62 @@ def get_qualified_user_id(username: str) -> str:
     return f"@{username}:matrix.local"
 
 
+def is_mine(id: Union[str, DomainSpecificString]) -> bool:
+    """Mirrors `ModuleApi.is_mine`: a parsed ID compares its domain, and a raw string
+    goes through `HomeServer.is_mine_id`, which returns False rather than raising on a
+    malformed ID."""
+    if isinstance(id, DomainSpecificString):
+        return id.domain == SERVER_NAME
+    localpart_hostname = id.split(":", 1)
+    if len(localpart_hostname) < 2:
+        return False
+    return localpart_hostname[1] == SERVER_NAME
+
+
 async def register_user(localpart: str, admin: bool = False) -> str:
     return f"@{localpart}:matrix.local"
+
+
+class StubRoomListHandler:
+    """Stand-in for Synapse's `RoomListHandler`.
+
+    `patch_room_list_handler` only reaches for the two methods it replaces, and requires
+    them to be coroutine functions.
+    """
+
+    def __init__(self) -> None:
+        self.calls: List[Tuple[str, Tuple[Any, ...], Dict[str, Any]]] = []
+        self.result: Dict[str, Any] = {
+            "chunk": [{"room_id": "!room:matrix.local"}],
+            "total_room_count_estimate": 1,
+        }
+
+    async def get_local_public_room_list(
+        self, *args: Any, **kwargs: Any
+    ) -> Dict[str, Any]:
+        self.calls.append(("get_local_public_room_list", args, kwargs))
+        return self.result
+
+    async def get_remote_public_room_list(
+        self, *args: Any, **kwargs: Any
+    ) -> Dict[str, Any]:
+        self.calls.append(("get_remote_public_room_list", args, kwargs))
+        return self.result
+
+
+def stub_homeserver(
+    handler: Any = None,
+    allow_public_rooms_without_auth: bool = False,
+) -> Mock:
+    """A stub for `ModuleApi._hs`, which `Mock(spec=ModuleApi)` does not provide because
+    it is an instance attribute.
+    """
+    hs = Mock()
+    hs.config.server.allow_public_rooms_without_auth = allow_public_rooms_without_auth
+    hs.get_room_list_handler.return_value = (
+        StubRoomListHandler() if handler is None else handler
+    )
+    return hs
 
 
 def create_module(
@@ -101,11 +159,13 @@ def create_module(
     # Create a mock based on the ModuleApi spec, but override some mocked functions
     # because some capabilities are needed for running the tests.
     module_api = Mock(spec=ModuleApi)
+    module_api._hs = stub_homeserver()
     module_api.http_client = client
-    module_api.server_name = "matrix.local"
+    module_api.server_name = SERVER_NAME
     module_api.public_baseurl = "https://matrix.local:1234/"
     module_api.run_db_interaction.side_effect = store.run_db_interaction
     module_api.get_qualified_user_id.side_effect = get_qualified_user_id
+    module_api.is_mine.side_effect = is_mine
     module_api.check_user_exists.return_value = make_awaitable(False)
     module_api.register_user.side_effect = register_user
     module_api.register_device.return_value = make_awaitable(

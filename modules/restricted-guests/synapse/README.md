@@ -7,8 +7,14 @@ A [pluggable synapse module](https://element-hq.github.io/synapse/latest/modules
 1. Provides an endpoint that creates temporary users with a same pattern (default: `guest-[randomstring]`).
 2. The temporary users have a mandatory displayname suffix (default: ` (Guest)`) that they can't remove from their profile.
 3. The temporary users are limited in what they can do (examples: create room, invite users).
-4. The temporary users won't be returned by the user directory search results.
+4. The temporary users won't be returned by the user directory search results, and the temporary users themselves get an empty user directory: they should not be handed a browsable index of users they have no relationship with.
 5. The temporary users are disabled after an expiration timeout (default: `24 hours`).
+
+## Compatibility
+
+This module requires Synapse 1.122.0 or later: the first release that tells the user directory spam checker who is searching, which the module needs to give guests an empty directory. On anything older, user directory searches fail with an internal error once the module is loaded.
+
+Gating the room directory (`hide_room_directory_from_guests`) is opt-in and disabled by default because it monkey-patches Synapse's internal `RoomListHandler`; Synapse has no module callback there. The patch was verified against Synapse 1.159, and the test suite re-verifies the patched internals against the installed Synapse. The module refuses to start if the methods it replaces have been renamed or re-shaped, but it cannot tell when a future Synapse stops recording the caller's user ID on the request's logging context: guests would then silently see the full room directory again. Do not rely on this option as the only control. Guests receive the same empty response Synapse serves when `enable_room_list_search` is disabled.
 
 ## Synapse configuration
 
@@ -16,8 +22,13 @@ This modules requires that the homeserver has the following configuration in the
 
 ```yaml
 # Required so Element is able to show the room preview where the user can login.
+# Only applies to legacy deployments that have not delegated authentication to
+# matrix-authentication-service: under MAS this option is inert, and the guest login
+# flow it enables does not exist.
 allow_guest_access: true
 ```
+
+If `hide_room_directory_from_guests` is enabled, `allow_public_rooms_without_auth` must be left at its default of `false`. With it enabled the room directory is readable without an access token and therefore cannot be gated per-user, and the module refuses to start.
 
 ## Module installation
 
@@ -40,6 +51,15 @@ The module provides (optional) configuration options:
 - `display_name_suffix` - the suffix added to the display name of guest users. Default: ` (Guest)`.
 - `enable_user_reaper` - if true, the module disables all users that are older than the configured expiration time. Default: `true`.
 - `user_expiration_seconds` - the expiration time in seconds when a guest user expires after their creation. Default: `86400` (=24 hours).
+- `hide_room_directory_from_guests` - if true, guests get an empty public room directory, including the `?server=` proxy to remote directories. Default: `false`.
+
+    This option monkey-patches Synapse internals (see [Compatibility](#compatibility)) and can silently stop working on a future Synapse. Deployments that leave it off can set `enable_room_list_search: false` in `homeserver.yaml` instead, which hides the directory from every user.
+
+- `rooms_forbidden_to_guests` - room IDs (not aliases — the module refuses aliases at startup) that guests must never be a member of, for example a hidden room that every user is auto-joined to. Guests are refused a join to these rooms even when they have been invited, and invites of guests into them are rejected. Default: `[]`.
+
+    This matters because membership of a room exposes its full member list over `/rooms/{roomId}/members`: a guest in a server-wide room can enumerate every user on the server, which is what hiding the user directory from guests is there to prevent. The join refusal is what enforces it — server admins bypass the invite check.
+
+    Denying an auto-join makes Synapse log an ERROR with a full traceback for each guest registration ("Failed to join new user to ..." naming the alias from `auto_join_rooms`). That is harmless: Synapse catches the failure per room, and registration still succeeds. When adopting `rooms_forbidden_to_guests` on an existing deployment, kick the guests that have already joined those rooms once; the option only prevents new joins.
 
 If matrix-authentication-service (MAS) is configured, the module will need to
 interface with it in order to register/deactivate users. Provide the below
@@ -61,6 +81,11 @@ modules:
       config:
           # Use a german suffix
           display_name_suffix: " (Gast)"
+          # Hide the public room directory from guests (opt-in, see Compatibility)
+          hide_room_directory_from_guests: true
+          # Guests may never join these rooms, invited or not
+          rooms_forbidden_to_guests:
+              - "!allUsers:example.org"
           # The below is required if using MAS
           mas:
               admin_api_base_url: https://mas.example.org

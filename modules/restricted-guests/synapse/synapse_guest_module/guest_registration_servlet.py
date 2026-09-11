@@ -98,7 +98,7 @@ class GuestRegistrationServlet(DirectServeJsonResource):
                 user_id = self._api.get_qualified_user_id(localpart)
 
                 logger.info(
-                    f"Registered guest user: '{user_id}' (MAS ID: '{mas_user_id}')"
+                    "Registered guest user: '%s' (MAS ID: '%s')", user_id, mas_user_id
                 )
 
                 await self._api.set_displayname(

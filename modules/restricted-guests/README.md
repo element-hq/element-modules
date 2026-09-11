@@ -14,4 +14,4 @@ These guest users
 
 This was initially created to allow non-organisation members to join NeoDateFix meeting rooms, even if they don't have a user account in the private and potentially non-federated homeserver.
 
-See further documentation in the Synapse and Element Web module directories.
+See further documentation in the [Synapse module directory](./synapse/). The Element Web module now lives in the [element-web monorepo](https://github.com/element-hq/element-web/tree/develop/modules/restricted-guests).
