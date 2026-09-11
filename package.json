@@ -54,7 +54,7 @@
         "vite": "8.0.15",
         "@vitest/browser-playwright": "4.1.8",
         "@vitest/coverage-v8": "4.1.8",
-        "vitest": "4.1.8"
+        "vitest": "4.1.11"
     },
     "packageManager": "yarn@1.22.22"
 }
