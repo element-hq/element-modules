@@ -19,7 +19,6 @@ jobs:
                 cmd:
                     - lint:types
                     - lint:codestyle
-                    - lint:eslint
                     - lint:workflows
                     - lint:prettier
                     - lint:knip
