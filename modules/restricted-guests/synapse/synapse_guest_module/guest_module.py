@@ -25,6 +25,7 @@ from synapse.module_api.errors import ConfigError
 from synapse.types import UserID
 
 from synapse_guest_module.config import GuestModuleConfig, MasConfig
+from synapse_guest_module.guest_invite_servlet import GuestInviteServlet
 from synapse_guest_module.guest_registration_servlet import GuestRegistrationServlet
 from synapse_guest_module.guest_user_reaper import GuestUserReaper
 from synapse_guest_module.mas_admin_client import MasAdminClient
@@ -58,6 +59,18 @@ class GuestModule:
         self._api.register_web_resource(
             "/_synapse/client/register_guest", self.registration_servlet
         )
+
+        # MAS is the one minting the invite codes and sending the emails, so
+        # there is nothing to serve here without it
+        self.invite_servlet = (
+            GuestInviteServlet(config, api, mas_admin_client)
+            if mas_admin_client is not None
+            else None
+        )
+        if self.invite_servlet is not None:
+            self._api.register_web_resource(
+                "/_synapse/client/invite_guests", self.invite_servlet
+            )
         self._api.register_third_party_rules_callbacks(
             on_profile_update=self.profile_update
         )

@@ -9,6 +9,7 @@ A [pluggable synapse module](https://element-hq.github.io/synapse/latest/modules
 3. The temporary users are limited in what they can do (examples: create room, invite users).
 4. The temporary users won't be returned by the user directory search results, and the temporary users themselves get an empty user directory: they should not be handed a browsable index of users they have no relationship with.
 5. The temporary users are disabled after an expiration timeout (default: `24 hours`).
+6. Provides an endpoint that invites people to a room by email, which MAS emails a personal invite link for.
 
 ## Compatibility
 
@@ -120,6 +121,38 @@ clients:
       client_auth_method: client_secret_basic
       client_secret: your-client-secret
 ```
+
+## Inviting guests by email
+
+`POST /_synapse/client/invite_guests` invites a list of email addresses to a room
+as guests. It requires the `mas` configuration above: MAS is what registers the users
+and sends the emails.
+
+```json
+{
+    "room_id": "!room:example.org",
+    "emails": ["alice@example.com", "bob@example.com"]
+}
+```
+
+The caller must be joined to the room and meet its `invite` power level, the same
+as for inviting a user directly. Each address gets an invite code of its own,
+pinned to that address and to a fresh guest localpart, which MAS emails a link
+for. The links only ever reach the recipients, so they are not in the response:
+
+```json
+{ "scheduled": 2 }
+```
+
+An address given more than once is invited once, which is what `scheduled`
+counts. A recipient who follows their link registers as the guest the code names
+— nothing exists on this homeserver until they do, and the room invite itself is
+not sent by this endpoint.
+
+Sending the emails needs MAS' task worker running. `mas-cli server` runs it unless
+started with `--no-worker`, and [`mas-cli worker`](https://element-hq.github.io/matrix-authentication-service/reference/cli/worker.html)
+runs it on its own. MAS also needs an [email
+sender](https://element-hq.github.io/matrix-authentication-service/reference/configuration.html#email).
 
 ## Production installation
 

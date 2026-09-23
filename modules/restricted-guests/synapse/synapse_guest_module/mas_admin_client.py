@@ -86,6 +86,33 @@ class MasAdminClient:
 
         return device_id, access_token
 
+    async def send_room_invites(
+        self, room_id: str, invites: list[dict[str, str]]
+    ) -> int:
+        """Has MAS mint an invite code for each recipient and email out the links.
+
+        Args:
+            room_id: The room the recipients are invited to.
+            invites: One `{"email", "username"}` mapping per recipient.
+
+        Returns:
+            How many recipients MAS scheduled an email for.
+        """
+        token = await self.request_admin_token()
+        url = self._build_admin_url("/api/admin/v1/room-invites")
+
+        response = await self._api.http_client.post_json_get_json(
+            uri=url,
+            post_json={"room_id": room_id, "invites": invites},
+            headers={"Authorization": [f"Bearer {token}"]},
+        )
+
+        scheduled = response.get("scheduled")
+        if not isinstance(scheduled, int):
+            raise ValueError("MAS room invite response missing `scheduled` field")
+
+        return scheduled
+
     async def deactivate_user(self, mas_user_id: str, token: str | None = None) -> None:
         if token is None:
             token = await self.request_admin_token()
