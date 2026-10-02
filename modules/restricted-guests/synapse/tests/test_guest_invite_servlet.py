@@ -8,9 +8,10 @@ from typing import Any, Dict, Optional, Tuple, cast
 from unittest.mock import Mock
 
 import aiounittest
-from synapse.api.errors import LimitExceededError
+from synapse.api.errors import HttpResponseException, LimitExceededError
 from synapse.api.room_versions import RoomVersions
 from synapse.events import make_event_from_dict
+from synapse.http import RequestTimedOutError
 from synapse.http.site import SynapseRequest
 from synapse.module_api import EventBase, StateMap
 from twisted.web.test.requesthelper import DummyRequest
@@ -340,3 +341,65 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
         module_api.get_room_state.return_value = room_state()
         status, _ = await self.render(module, two_emails)
         self.assertEqual(status, 202)
+
+    async def test_mas_bad_request(self) -> None:
+        module, module_api, _ = self.create_module()
+        module_api.http_client.post_json_get_json.side_effect = HttpResponseException(
+            400, "Bad Request", b'{"errors":[{"title":"Invalid email address"}]}'
+        )
+
+        status, response = await self.render(module)
+
+        self.assertEqual((status, response), (400, {"msg": "Invalid email address"}))
+
+    async def test_mas_bad_request_unknown_body(self) -> None:
+        module, module_api, _ = self.create_module()
+        module_api.http_client.post_json_get_json.side_effect = HttpResponseException(
+            400, "Bad Request", b"<html>Bad Request</html>"
+        )
+
+        status, response = await self.render(module)
+
+        self.assertEqual((status, response), (400, {"msg": "MAS refused the invites"}))
+
+    async def test_mas_invites_disabled(self) -> None:
+        module, module_api, _ = self.create_module()
+        module_api.http_client.post_json_get_json.side_effect = HttpResponseException(
+            404, "Not Found", b'{"errors":[{"title":"Not found"}]}'
+        )
+
+        with self.assertLogs("synapse.contrib", "WARNING"):
+            status, response = await self.render(module)
+
+        self.assertEqual(status, 404)
+
+    async def test_mas_other_error(self) -> None:
+        module, module_api, _ = self.create_module()
+        module_api.http_client.post_json_get_json.side_effect = HttpResponseException(
+            409, "Conflict", b'{"errors":[{"title":"Username taken"}]}'
+        )
+
+        status, response = await self.render(module)
+
+        self.assertEqual(status, 502)
+
+    async def test_mas_token_refused(self) -> None:
+        module, module_api, _ = self.create_module()
+        module_api.http_client.post_urlencoded_get_json.side_effect = (
+            HttpResponseException(400, "Bad Request", b'{"error":"invalid_client"}')
+        )
+
+        status, response = await self.render(module)
+
+        self.assertEqual(status, 502)
+        module_api.http_client.post_json_get_json.assert_not_called()
+
+    async def test_mas_timeout(self) -> None:
+        module, module_api, _ = self.create_module()
+        module_api.http_client.post_json_get_json.side_effect = RequestTimedOutError(
+            "Timeout"
+        )
+
+        status, response = await self.render(module)
+
+        self.assertEqual(status, 502)

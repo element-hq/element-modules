@@ -3,11 +3,13 @@
 # SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
 # Please see LICENSE files in the project root for full details.
 
+import json
 import logging
 import secrets
 import string
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from synapse.api.errors import HttpResponseException
 from synapse.api.ratelimiting import Ratelimiter
 from synapse.config.ratelimiting import RatelimitSettings
 from synapse.event_auth import get_named_level, get_user_power_level
@@ -146,9 +148,31 @@ class GuestInviteServlet(DirectServeJsonResource):
         inviter_name = _non_empty_string(
             state.get(("m.room.member", user_id)), "displayname"
         )
-        scheduled = await self._mas_admin_client.invite_guests(
-            room_id, room_name, user_id, inviter_name, invites
-        )
+        try:
+            # Outside the inner `try`, because a refused token request is between
+            # this module and MAS, not the inviter's to see
+            token = await self._mas_admin_client.request_admin_token()
+            try:
+                scheduled = await self._mas_admin_client.invite_guests(
+                    room_id, room_name, user_id, inviter_name, invites, token
+                )
+            except HttpResponseException as e:
+                if e.code == 400:
+                    return 400, {
+                        "msg": _first_error_title(e.response)
+                        or "MAS refused the invites"
+                    }
+                if e.code == 404:
+                    logger.warning(
+                        "MAS answered guest invites with 404: it's too old, has them "
+                        "turned off, or isn't at 'mas.admin_api_base_url'"
+                    )
+                    return 404, {"msg": "Inviting guests by email is turned off"}
+                raise
+        # A timeout is a `SynapseError`, and a connection failure a Twisted error
+        except Exception:
+            logger.exception("Failed to send guest invites to MAS")
+            return 502, {"msg": "Failed to send the invites"}
 
         return 202, {"scheduled": scheduled}
 
@@ -178,3 +202,12 @@ def _non_empty_string(event: Optional[EventBase], key: str) -> Optional[str]:
     """
     value = event.content.get(key) if event is not None else None
     return value if isinstance(value, str) and value else None
+
+
+def _first_error_title(body: bytes) -> Optional[str]:
+    """The first title in a MAS admin API error body, `{"errors": [{"title"}]}`."""
+    try:
+        title = json.loads(body)["errors"][0]["title"]
+    except (ValueError, LookupError, TypeError):
+        return None
+    return title if isinstance(title, str) else None

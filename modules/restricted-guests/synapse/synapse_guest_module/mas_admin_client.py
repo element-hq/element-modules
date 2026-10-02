@@ -94,6 +94,7 @@ class MasAdminClient:
         inviter: str,
         inviter_name: Optional[str],
         invites: list[dict[str, str]],
+        token: str,
     ) -> int:
         """Has MAS mint an invite code for each recipient and email out the links.
 
@@ -103,11 +104,15 @@ class MasAdminClient:
             inviter: The Matrix ID of the user inviting them.
             inviter_name: The inviter's display name in the room, if they have one.
             invites: One `{"email", "username"}` mapping per recipient.
+            token: An admin access token from `request_admin_token`.
 
         Returns:
             How many recipients MAS scheduled an email for.
+
+        Raises:
+            ValueError: If the response has no `scheduled` count.
+            HttpResponseException: On a non-2xx HTTP response.
         """
-        token = await self.request_admin_token()
         url = self._build_admin_url("/api/admin/v1/invite-guests")
 
         body: dict[str, Any] = {
