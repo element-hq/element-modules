@@ -7,6 +7,7 @@ import base64
 import logging
 import random
 import string
+from typing import Any, Optional
 
 from synapse.module_api import ModuleApi
 
@@ -86,30 +87,45 @@ class MasAdminClient:
 
         return device_id, access_token
 
-    async def send_room_invites(
-        self, room_id: str, invites: list[dict[str, str]]
+    async def invite_guests(
+        self,
+        room_id: str,
+        room_name: Optional[str],
+        inviter: str,
+        inviter_name: Optional[str],
+        invites: list[dict[str, str]],
     ) -> int:
         """Has MAS mint an invite code for each recipient and email out the links.
 
         Args:
             room_id: The room the recipients are invited to.
+            room_name: The room's name, if it has one.
+            inviter: The Matrix ID of the user inviting them.
+            inviter_name: The inviter's display name in the room, if they have one.
             invites: One `{"email", "username"}` mapping per recipient.
 
         Returns:
             How many recipients MAS scheduled an email for.
         """
         token = await self.request_admin_token()
-        url = self._build_admin_url("/api/admin/v1/room-invites")
+        url = self._build_admin_url("/api/admin/v1/invite-guests")
 
+        body: dict[str, Any] = {
+            "room_id": room_id,
+            "room_name": room_name,
+            "inviter": inviter,
+            "inviter_name": inviter_name,
+            "invites": invites,
+        }
         response = await self._api.http_client.post_json_get_json(
             uri=url,
-            post_json={"room_id": room_id, "invites": invites},
+            post_json={key: value for key, value in body.items() if value is not None},
             headers={"Authorization": [f"Bearer {token}"]},
         )
 
         scheduled = response.get("scheduled")
         if not isinstance(scheduled, int):
-            raise ValueError("MAS room invite response missing `scheduled` field")
+            raise ValueError("MAS guest invite response missing `scheduled` field")
 
         return scheduled
 

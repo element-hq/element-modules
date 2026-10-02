@@ -6,7 +6,7 @@
 import logging
 import secrets
 import string
-from typing import Any, Callable, Dict, List, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from synapse.api.ratelimiting import Ratelimiter
 from synapse.config.ratelimiting import RatelimitSettings
@@ -109,6 +109,7 @@ class GuestInviteServlet(DirectServeJsonResource):
                 ("m.room.create", ""),
                 ("m.room.join_rules", ""),
                 ("m.room.member", user_id),
+                ("m.room.name", ""),
                 ("m.room.power_levels", ""),
             ],
         )
@@ -141,7 +142,13 @@ class GuestInviteServlet(DirectServeJsonResource):
         logger.info(
             "'%s' is inviting %d guest(s) to '%s'", user_id, len(invites), room_id
         )
-        scheduled = await self._mas_admin_client.send_room_invites(room_id, invites)
+        room_name = _non_empty_string(state.get(("m.room.name", "")), "name")
+        inviter_name = _non_empty_string(
+            state.get(("m.room.member", user_id)), "displayname"
+        )
+        scheduled = await self._mas_admin_client.invite_guests(
+            room_id, room_name, user_id, inviter_name, invites
+        )
 
         return 202, {"scheduled": scheduled}
 
@@ -162,3 +169,12 @@ class GuestInviteServlet(DirectServeJsonResource):
         return get_user_power_level(user_id, state) >= get_named_level(
             state, "invite", 0
         )
+
+
+def _non_empty_string(event: Optional[EventBase], key: str) -> Optional[str]:
+    """The event's content value for this key, if it's a non-empty string.
+
+    Room members set these, so they can hold anything.
+    """
+    value = event.content.get(key) if event is not None else None
+    return value if isinstance(value, str) and value else None

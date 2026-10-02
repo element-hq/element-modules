@@ -51,6 +51,8 @@ def room_state(
     power_levels: Optional[Dict[str, Any]] = None,
     creator: str = CREATOR,
     join_rule: str = "knock",
+    name: Any = None,
+    displayname: Any = None,
 ) -> StateMap[EventBase]:
     state = {
         ("m.room.create", ""): state_event("m.room.create", {}, sender=creator),
@@ -58,9 +60,14 @@ def room_state(
             "m.room.join_rules", {"join_rule": join_rule}
         ),
     }
+    member: Dict[str, Any] = {"membership": "join"}
+    if displayname is not None:
+        member["displayname"] = displayname
     state[("m.room.member", INVITER)] = state_event(
-        "m.room.member", {"membership": "join"}, INVITER, INVITER
+        "m.room.member", member, INVITER, INVITER
     )
+    if name is not None:
+        state[("m.room.name", "")] = state_event("m.room.name", {"name": name})
     if power_levels is not None:
         state[("m.room.power_levels", "")] = state_event(
             "m.room.power_levels", power_levels
@@ -213,7 +220,9 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
     async def test_success(self) -> None:
         module, module_api, _ = self.create_module()
         module_api.get_room_state.return_value = room_state(
-            power_levels={"invite": 50, "users": {INVITER: 100}}
+            power_levels={"invite": 50, "users": {INVITER: 100}},
+            name="Project X",
+            displayname="Alice",
         )
 
         status, response = await self.render(
@@ -226,8 +235,15 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
         self.assertEqual(response, {"scheduled": 2})
 
         module_api.http_client.post_json_get_json.assert_called_once()
-        body = module_api.http_client.post_json_get_json.call_args.kwargs["post_json"]
+        call = module_api.http_client.post_json_get_json.call_args
+        self.assertEqual(
+            call.kwargs["uri"], "https://mas.example.org/api/admin/v1/invite-guests"
+        )
+        body = call.kwargs["post_json"]
         self.assertEqual(body["room_id"], ROOM_ID)
+        self.assertEqual(body["room_name"], "Project X")
+        self.assertEqual(body["inviter"], INVITER)
+        self.assertEqual(body["inviter_name"], "Alice")
         self.assertEqual(
             [invite["email"] for invite in body["invites"]],
             ["alice@example.com", "bob@example.com"],
@@ -237,6 +253,16 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
         for username in usernames:
             self.assertRegex(username, r"^guest-[a-z0-9]{32}$")
         self.assertEqual(len(set(usernames)), 2)
+
+    async def test_invalid_names_left_out(self) -> None:
+        module, module_api, _ = self.create_module()
+        module_api.get_room_state.return_value = room_state(name=42)
+
+        status, response = await self.render(module)
+
+        self.assertEqual(status, 202)
+        body = module_api.http_client.post_json_get_json.call_args.kwargs["post_json"]
+        self.assertEqual(set(body), {"room_id", "inviter", "invites"})
 
     async def test_duplicate_emails(self) -> None:
         module, module_api, _ = self.create_module(
