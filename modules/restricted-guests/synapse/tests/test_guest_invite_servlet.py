@@ -38,7 +38,9 @@ def room_state(
 
 class GuestInviteServletTest(aiounittest.AsyncTestCase):
     def create_module(self) -> Tuple[GuestModule, Mock, SQLiteStore]:
-        module, module_api, store = create_module(mas_config_override())
+        module, module_api, store = create_module(
+            {**mas_config_override(), "email_invites": {"enabled": True}}
+        )
 
         requester = Mock()
         requester.user.to_string.return_value = INVITER
@@ -65,10 +67,21 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
         request.content = io.BytesIO(body)
         return await servlet._async_render_POST(request)
 
-    async def test_no_servlet_without_mas(self) -> None:
-        module, _, _ = create_module()
+    async def test_servlet_when_enabled(self) -> None:
+        module, module_api, _ = self.create_module()
+
+        module_api.register_web_resource.assert_any_call(
+            "/_synapse/client/invite_guests", module.invite_servlet
+        )
+
+    async def test_no_servlet_when_disabled(self) -> None:
+        module, module_api, _ = create_module(mas_config_override())
 
         self.assertIsNone(module.invite_servlet)
+        self.assertNotIn(
+            "/_synapse/client/invite_guests",
+            [c.args[0] for c in module_api.register_web_resource.call_args_list],
+        )
 
     async def test_missing_room_id(self) -> None:
         module, _, _ = self.create_module()

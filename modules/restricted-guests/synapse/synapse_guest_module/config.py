@@ -23,6 +23,15 @@ class MasConfig:
 
 
 @attr.s(frozen=True, auto_attribs=True)
+class EmailInvitesConfig:
+    enabled: bool = False
+    # 20 covers a team invited at once; 50 an hour bounds the mail one user sends in
+    # the server's name
+    max_emails: int = 20
+    per_inviter_per_hour: int = 50
+
+
+@attr.s(frozen=True, auto_attribs=True)
 class GuestModuleConfig:
     user_id_prefix: str
     display_name_suffix: str
@@ -38,3 +47,4 @@ class GuestModuleConfig:
     # directory from guests is meant to prevent.
     # Both invites of guests into these rooms and joins by guests are denied.
     rooms_forbidden_to_guests: FrozenSet[str] = frozenset()
+    email_invites: EmailInvitesConfig = EmailInvitesConfig()

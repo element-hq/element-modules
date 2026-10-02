@@ -24,7 +24,7 @@ from synapse.module_api import (
 from synapse.module_api.errors import ConfigError
 from synapse.types import UserID
 
-from synapse_guest_module.config import GuestModuleConfig, MasConfig
+from synapse_guest_module.config import EmailInvitesConfig, GuestModuleConfig, MasConfig
 from synapse_guest_module.guest_invite_servlet import GuestInviteServlet
 from synapse_guest_module.guest_registration_servlet import GuestRegistrationServlet
 from synapse_guest_module.guest_user_reaper import GuestUserReaper
@@ -60,14 +60,9 @@ class GuestModule:
             "/_synapse/client/register_guest", self.registration_servlet
         )
 
-        # MAS is the one minting the invite codes and sending the emails, so
-        # there is nothing to serve here without it
-        self.invite_servlet = (
-            GuestInviteServlet(config, api, mas_admin_client)
-            if mas_admin_client is not None
-            else None
-        )
-        if self.invite_servlet is not None:
+        self.invite_servlet: Optional[GuestInviteServlet] = None
+        if config.email_invites.enabled and mas_admin_client is not None:
+            self.invite_servlet = GuestInviteServlet(config, api, mas_admin_client)
             self._api.register_web_resource(
                 "/_synapse/client/invite_guests", self.invite_servlet
             )
@@ -218,6 +213,37 @@ class GuestModule:
                 client_secret_filepath,
             )
 
+        email_invites_config = config.get("email_invites")
+        if email_invites_config is None:
+            email_invites_config = {}
+        if not isinstance(email_invites_config, dict):
+            raise ConfigError("Config option 'email_invites' must be an object")
+
+        email_invites_enabled = email_invites_config.get("enabled", False)
+        if not isinstance(email_invites_enabled, bool):
+            raise ConfigError("Config option 'email_invites.enabled' must be a bool")
+
+        if email_invites_enabled and mas is None:
+            raise ConfigError("Config option 'email_invites' requires 'mas'")
+
+        max_emails = email_invites_config.get("max_emails", 20)
+        per_inviter_per_hour = email_invites_config.get("per_inviter_per_hour", 50)
+        for name, value in (
+            ("max_emails", max_emails),
+            ("per_inviter_per_hour", per_inviter_per_hour),
+        ):
+            if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+                raise ConfigError(
+                    f"Config option 'email_invites.{name}' must be a positive integer"
+                )
+
+        # A request for more emails than the hourly limit could never pass it
+        if max_emails > per_inviter_per_hour:
+            raise ConfigError(
+                "Config option 'email_invites.max_emails' can't exceed "
+                "'email_invites.per_inviter_per_hour'"
+            )
+
         return GuestModuleConfig(
             user_id_prefix,
             display_name_suffix,
@@ -226,6 +252,9 @@ class GuestModule:
             mas,
             hide_room_directory_from_guests,
             frozenset(rooms_forbidden_to_guests),
+            email_invites=EmailInvitesConfig(
+                email_invites_enabled, max_emails, per_inviter_per_hour
+            ),
         )
 
     async def profile_update(
