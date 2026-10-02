@@ -8,7 +8,10 @@ from typing import Any, Dict, Optional, Tuple, cast
 from unittest.mock import Mock
 
 import aiounittest
+from synapse.api.room_versions import RoomVersions
+from synapse.events import make_event_from_dict
 from synapse.http.site import SynapseRequest
+from synapse.module_api import EventBase, StateMap
 from twisted.web.test.requesthelper import DummyRequest
 
 from synapse_guest_module import GuestModule
@@ -16,23 +19,45 @@ from tests import SQLiteStore, create_module, mas_config_override
 
 ROOM_ID = "!room:matrix.local"
 INVITER = "@inviter:matrix.local"
+CREATOR = "@creator:matrix.local"
 
 
-def state_event(content: Dict[str, Any]) -> Mock:
-    event = Mock()
-    event.content = content
-    return event
+def state_event(
+    event_type: str,
+    content: Dict[str, Any],
+    state_key: str = "",
+    sender: str = CREATOR,
+) -> EventBase:
+    event: Dict[str, Any] = {
+        "type": event_type,
+        "state_key": state_key,
+        "sender": sender,
+        "content": content,
+        "auth_events": [],
+        "prev_events": [],
+        "depth": 1,
+        "origin_server_ts": 0,
+        "hashes": {},
+        "signatures": {},
+    }
+    # A version 12 create event has no room ID: the room's ID is derived from it
+    if event_type != "m.room.create":
+        event["room_id"] = ROOM_ID
+    return make_event_from_dict(event, RoomVersions.V12)
 
 
 def room_state(
-    membership: Optional[str] = "join",
     power_levels: Optional[Dict[str, Any]] = None,
-) -> Dict[Tuple[str, str], Mock]:
-    state = {}
-    if membership is not None:
-        state[("m.room.member", INVITER)] = state_event({"membership": membership})
+    creator: str = CREATOR,
+) -> StateMap[EventBase]:
+    state = {("m.room.create", ""): state_event("m.room.create", {}, sender=creator)}
+    state[("m.room.member", INVITER)] = state_event(
+        "m.room.member", {"membership": "join"}, INVITER, INVITER
+    )
     if power_levels is not None:
-        state[("m.room.power_levels", "")] = state_event(power_levels)
+        state[("m.room.power_levels", "")] = state_event(
+            "m.room.power_levels", power_levels
+        )
     return state
 
 
@@ -101,9 +126,9 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
 
         self.assertEqual(status, 400)
 
-    async def test_not_in_room(self) -> None:
+    async def test_room_unknown_to_server(self) -> None:
         module, module_api, _ = self.create_module()
-        module_api.get_room_state.return_value = room_state(None)
+        module_api.get_room_state.return_value = {}
 
         status, response = await self.render(module)
 
@@ -118,6 +143,17 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
 
         self.assertEqual(status, 403)
         module_api.http_client.post_json_get_json.assert_not_called()
+
+    async def test_room_creator(self) -> None:
+        module, module_api, _ = self.create_module()
+        # Version 12 creators outrank every power level, and aren't listed in `users`
+        module_api.get_room_state.return_value = room_state(
+            power_levels={"invite": 50}, creator=INVITER
+        )
+
+        status, response = await self.render(module)
+
+        self.assertEqual(status, 202)
 
     async def test_success(self) -> None:
         module, module_api, _ = self.create_module()

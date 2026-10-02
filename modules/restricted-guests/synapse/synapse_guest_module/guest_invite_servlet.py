@@ -8,10 +8,13 @@ import secrets
 import string
 from typing import Any, Dict, List, Tuple
 
+from synapse.event_auth import get_named_level, get_user_power_level
 from synapse.http.site import SynapseRequest
 from synapse.module_api import (
     DirectServeJsonResource,
+    EventBase,
     ModuleApi,
+    StateMap,
     parse_json_object_from_request,
 )
 
@@ -72,7 +75,15 @@ class GuestInviteServlet(DirectServeJsonResource):
             }
 
         user_id = requester.user.to_string()
-        if not await self._may_invite(user_id, room_id):
+        state = await self._api.get_room_state(
+            room_id,
+            [
+                ("m.room.create", ""),
+                ("m.room.member", user_id),
+                ("m.room.power_levels", ""),
+            ],
+        )
+        if not self._may_invite(user_id, state):
             return 403, {"msg": "You are not allowed to invite users to this room"}
 
         invites: List[Dict[str, str]] = []
@@ -90,24 +101,20 @@ class GuestInviteServlet(DirectServeJsonResource):
 
         return 202, {"scheduled": scheduled}
 
-    async def _may_invite(self, user_id: str, room_id: str) -> bool:
-        """Whether this user may invite guests to this room.
+    @staticmethod
+    def _may_invite(user_id: str, state: StateMap[EventBase]) -> bool:
+        """Whether this user may invite guests to the room with this state.
 
         The guests are invited by email rather than by a membership event, so
         nothing else checks this. It mirrors what Synapse requires of a real
         invite: the user is joined to the room and meets its invite power level.
         """
-        state = await self._api.get_room_state(
-            room_id, [("m.room.member", user_id), ("m.room.power_levels", "")]
-        )
-
+        # A room this server isn't in has no state, not even the create event
+        # that `get_user_power_level` asserts
         member = state.get(("m.room.member", user_id))
         if member is None or member.content.get("membership") != "join":
             return False
 
-        power_levels = state.get(("m.room.power_levels", ""))
-        content = power_levels.content if power_levels is not None else {}
-        users = content.get("users", {})
-        user_level = users.get(user_id, content.get("users_default", 0))
-
-        return bool(user_level >= content.get("invite", 0))
+        return get_user_power_level(user_id, state) >= get_named_level(
+            state, "invite", 0
+        )
