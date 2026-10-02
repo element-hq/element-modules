@@ -49,8 +49,14 @@ def state_event(
 def room_state(
     power_levels: Optional[Dict[str, Any]] = None,
     creator: str = CREATOR,
+    join_rule: str = "knock",
 ) -> StateMap[EventBase]:
-    state = {("m.room.create", ""): state_event("m.room.create", {}, sender=creator)}
+    state = {
+        ("m.room.create", ""): state_event("m.room.create", {}, sender=creator),
+        ("m.room.join_rules", ""): state_event(
+            "m.room.join_rules", {"join_rule": join_rule}
+        ),
+    }
     state[("m.room.member", INVITER)] = state_event(
         "m.room.member", {"membership": "join"}, INVITER, INVITER
     )
@@ -62,9 +68,15 @@ def room_state(
 
 
 class GuestInviteServletTest(aiounittest.AsyncTestCase):
-    def create_module(self) -> Tuple[GuestModule, Mock, SQLiteStore]:
+    def create_module(
+        self, config_override: Optional[Dict[str, Any]] = None
+    ) -> Tuple[GuestModule, Mock, SQLiteStore]:
         module, module_api, store = create_module(
-            {**mas_config_override(), "email_invites": {"enabled": True}}
+            {
+                **mas_config_override(),
+                "email_invites": {"enabled": True},
+                **(config_override or {}),
+            }
         )
 
         requester = Mock()
@@ -125,6 +137,41 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
         )
 
         self.assertEqual(status, 400)
+
+    async def test_guest_sender(self) -> None:
+        module, module_api, _ = self.create_module()
+        module_api.get_user_by_req.return_value.user.to_string.return_value = (
+            "@guest-asdf:matrix.local"
+        )
+
+        status, response = await self.render(module)
+
+        self.assertEqual(status, 403)
+        self.assertEqual(response, {"msg": "Guests can't invite guests"})
+        module_api.http_client.post_json_get_json.assert_not_called()
+
+    async def test_knock_restricted_room(self) -> None:
+        module, module_api, _ = self.create_module()
+        module_api.get_room_state.return_value = room_state(
+            join_rule="knock_restricted"
+        )
+
+        status, response = await self.render(module)
+
+        self.assertEqual(status, 403)
+        self.assertEqual(response["reason"], "room_not_knockable")
+        module_api.http_client.post_json_get_json.assert_not_called()
+
+    async def test_forbidden_room(self) -> None:
+        module, module_api, _ = self.create_module(
+            {"rooms_forbidden_to_guests": [ROOM_ID]}
+        )
+
+        status, response = await self.render(module)
+
+        self.assertEqual(status, 403)
+        self.assertEqual(response, {"msg": "Guests are forbidden from this room"})
+        module_api.http_client.post_json_get_json.assert_not_called()
 
     async def test_room_unknown_to_server(self) -> None:
         module, module_api, _ = self.create_module()

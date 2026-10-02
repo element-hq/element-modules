@@ -62,7 +62,9 @@ class GuestModule:
 
         self.invite_servlet: Optional[GuestInviteServlet] = None
         if config.email_invites.enabled and mas_admin_client is not None:
-            self.invite_servlet = GuestInviteServlet(config, api, mas_admin_client)
+            self.invite_servlet = GuestInviteServlet(
+                config, api, mas_admin_client, self._is_module_guest
+            )
             self._api.register_web_resource(
                 "/_synapse/client/invite_guests", self.invite_servlet
             )

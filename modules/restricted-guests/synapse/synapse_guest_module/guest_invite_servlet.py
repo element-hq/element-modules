@@ -6,7 +6,7 @@
 import logging
 import secrets
 import string
-from typing import Any, Dict, List, Tuple
+from typing import Any, Callable, Dict, List, Tuple
 
 from synapse.event_auth import get_named_level, get_user_power_level
 from synapse.http.site import SynapseRequest
@@ -40,11 +40,13 @@ class GuestInviteServlet(DirectServeJsonResource):
         config: GuestModuleConfig,
         api: ModuleApi,
         mas_admin_client: MasAdminClient,
+        is_module_guest: Callable[[str], bool],
     ):
         super().__init__()
         self._api = api
         self._config = config
         self._mas_admin_client = mas_admin_client
+        self._is_module_guest = is_module_guest
 
     async def _async_render_POST(
         self, request: SynapseRequest
@@ -75,16 +77,32 @@ class GuestInviteServlet(DirectServeJsonResource):
             }
 
         user_id = requester.user.to_string()
+        if self._is_module_guest(user_id):
+            return 403, {"msg": "Guests can't invite guests"}
+
         state = await self._api.get_room_state(
             room_id,
             [
                 ("m.room.create", ""),
+                ("m.room.join_rules", ""),
                 ("m.room.member", user_id),
                 ("m.room.power_levels", ""),
             ],
         )
         if not self._may_invite(user_id, state):
             return 403, {"msg": "You are not allowed to invite users to this room"}
+
+        # An email-invited guest has no Matrix invite, so it gets in by asking to
+        # join, and Element Web offers that only for `knock`, not `knock_restricted`
+        join_rules = state.get(("m.room.join_rules", ""))
+        if join_rules is None or join_rules.content.get("join_rule") != "knock":
+            return 403, {
+                "msg": "Guests can only be invited to rooms they can ask to join",
+                "reason": "room_not_knockable",
+            }
+
+        if room_id in self._config.rooms_forbidden_to_guests:
+            return 403, {"msg": "Guests are forbidden from this room"}
 
         invites: List[Dict[str, str]] = []
         for email in emails:
