@@ -49,6 +49,7 @@ The module provides (optional) configuration options:
 
 - `user_id_prefix` - the prefix of the usernames that are created by this module. Default: `guest-`.
 - `display_name_suffix` - the suffix added to the display name of guest users. Default: ` (Guest)`.
+- `enable_guest_registration` - if false, the module doesn't serve `/_synapse/client/register_guest`. Element Web's restricted-guests module calls that endpoint from its "Join as guest" button, so the button stops working while this is off. Default: `true`.
 - `enable_user_reaper` - if true, the module disables all users that are older than the configured expiration time. Default: `true`.
 - `user_expiration_seconds` - the expiration time in seconds when a guest user expires after their creation. Default: `86400` (=24 hours).
 - `hide_room_directory_from_guests` - if true, guests get an empty public room directory, including the `?server=` proxy to remote directories. Default: `false`.
