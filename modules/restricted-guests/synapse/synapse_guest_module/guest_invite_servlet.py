@@ -8,6 +8,8 @@ import secrets
 import string
 from typing import Any, Callable, Dict, List, Tuple
 
+from synapse.api.ratelimiting import Ratelimiter
+from synapse.config.ratelimiting import RatelimitSettings
 from synapse.event_auth import get_named_level, get_user_power_level
 from synapse.http.site import SynapseRequest
 from synapse.module_api import (
@@ -48,6 +50,18 @@ class GuestInviteServlet(DirectServeJsonResource):
         self._mas_admin_client = mas_admin_client
         self._is_module_guest = is_module_guest
 
+        # Per worker, and reset on restart
+        per_hour = config.email_invites.per_inviter_per_hour
+        self._ratelimiter = Ratelimiter(
+            store=api._hs.get_datastores().main,
+            clock=api._hs.get_clock(),
+            cfg=RatelimitSettings(
+                key="guest_module_invite_guests",
+                per_second=per_hour / 3600,
+                burst_count=per_hour,
+            ),
+        )
+
     async def _async_render_POST(
         self, request: SynapseRequest
     ) -> Tuple[int, Dict[str, Any]]:
@@ -75,6 +89,15 @@ class GuestInviteServlet(DirectServeJsonResource):
             return 400, {
                 "msg": "You must provide 'emails' as a non-empty list of strings"
             }
+
+        # Keyed ignoring case, keeping the first spelling of each address
+        unique_emails: Dict[str, str] = {}
+        for email in emails:
+            unique_emails.setdefault(email.strip().lower(), email.strip())
+
+        max_emails = self._config.email_invites.max_emails
+        if len(unique_emails) > max_emails:
+            return 400, {"msg": f"You can invite at most {max_emails} emails at once"}
 
         user_id = requester.user.to_string()
         if self._is_module_guest(user_id):
@@ -104,13 +127,16 @@ class GuestInviteServlet(DirectServeJsonResource):
         if room_id in self._config.rooms_forbidden_to_guests:
             return 403, {"msg": "Guests are forbidden from this room"}
 
+        # Last, so that a refused request doesn't spend the limit
+        await self._ratelimiter.ratelimit(requester, n_actions=len(unique_emails))
+
         invites: List[Dict[str, str]] = []
-        for email in emails:
+        for email in unique_emails.values():
             localpart = self._config.user_id_prefix + "".join(
                 secrets.choice(string.ascii_lowercase + string.digits)
                 for _ in range(32)
             )
-            invites.append({"email": email.strip(), "username": localpart})
+            invites.append({"email": email, "username": localpart})
 
         logger.info(
             "'%s' is inviting %d guest(s) to '%s'", user_id, len(invites), room_id

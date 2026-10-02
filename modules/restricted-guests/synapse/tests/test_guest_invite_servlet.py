@@ -8,6 +8,7 @@ from typing import Any, Dict, Optional, Tuple, cast
 from unittest.mock import Mock
 
 import aiounittest
+from synapse.api.errors import LimitExceededError
 from synapse.api.room_versions import RoomVersions
 from synapse.events import make_event_from_dict
 from synapse.http.site import SynapseRequest
@@ -15,7 +16,7 @@ from synapse.module_api import EventBase, StateMap
 from twisted.web.test.requesthelper import DummyRequest
 
 from synapse_guest_module import GuestModule
-from tests import SQLiteStore, create_module, mas_config_override
+from tests import SQLiteStore, create_module, make_awaitable, mas_config_override
 
 ROOM_ID = "!room:matrix.local"
 INVITER = "@inviter:matrix.local"
@@ -69,20 +70,27 @@ def room_state(
 
 class GuestInviteServletTest(aiounittest.AsyncTestCase):
     def create_module(
-        self, config_override: Optional[Dict[str, Any]] = None
+        self,
+        config_override: Optional[Dict[str, Any]] = None,
+        email_invites: Optional[Dict[str, Any]] = None,
     ) -> Tuple[GuestModule, Mock, SQLiteStore]:
         module, module_api, store = create_module(
             {
                 **mas_config_override(),
-                "email_invites": {"enabled": True},
+                "email_invites": {"enabled": True, **(email_invites or {})},
                 **(config_override or {}),
             }
         )
 
         requester = Mock()
         requester.user.to_string.return_value = INVITER
+        requester.authenticated_entity = INVITER
+        requester.app_service_id = None
 
         module_api.get_user_by_req.return_value = requester
+        module_api._hs.get_clock.return_value.time.return_value = 0.0
+        datastore = module_api._hs.get_datastores.return_value.main
+        datastore.get_ratelimit_for_user.return_value = make_awaitable(None)
         module_api.get_room_state.return_value = room_state()
         module_api.http_client.post_urlencoded_get_json.return_value = {
             "access_token": "mas_admin_token"
@@ -229,3 +237,80 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
         for username in usernames:
             self.assertRegex(username, r"^guest-[a-z0-9]{32}$")
         self.assertEqual(len(set(usernames)), 2)
+
+    async def test_duplicate_emails(self) -> None:
+        module, module_api, _ = self.create_module(
+            email_invites={"max_emails": 1, "per_inviter_per_hour": 1}
+        )
+
+        status, response = await self.render(
+            module,
+            b'{"room_id":"!room:matrix.local",'
+            b'"emails":["Bob@example.com","bob@example.com"," BOB@example.com"]}',
+        )
+
+        self.assertEqual(status, 202)
+        body = module_api.http_client.post_json_get_json.call_args.kwargs["post_json"]
+        self.assertEqual(
+            [invite["email"] for invite in body["invites"]], ["Bob@example.com"]
+        )
+
+    async def test_too_many_emails(self) -> None:
+        module, module_api, _ = self.create_module(email_invites={"max_emails": 2})
+
+        status, response = await self.render(
+            module,
+            b'{"room_id":"!room:matrix.local",'
+            b'"emails":["a@example.com","b@example.com","c@example.com"]}',
+        )
+
+        self.assertEqual(status, 400)
+        module_api.http_client.post_json_get_json.assert_not_called()
+
+    async def test_limit_counts_emails(self) -> None:
+        module, module_api, _ = self.create_module(
+            email_invites={"max_emails": 3, "per_inviter_per_hour": 3}
+        )
+        two_emails = (
+            b'{"room_id":"!room:matrix.local",'
+            b'"emails":["a@example.com","b@example.com"]}'
+        )
+
+        status, _ = await self.render(module, two_emails)
+        self.assertEqual(status, 202)
+
+        # One email is left, so a request for two is refused whole
+        with self.assertRaises(LimitExceededError) as cm:
+            await self.render(module, two_emails)
+        self.assertEqual(cm.exception.code, 429)
+        self.assertIsNotNone(cm.exception.retry_after_ms)
+
+        status, _ = await self.render(
+            module, b'{"room_id":"!room:matrix.local","emails":["c@example.com"]}'
+        )
+        self.assertEqual(status, 202)
+        self.assertEqual(module_api.http_client.post_json_get_json.call_count, 2)
+
+    async def test_refused_request_does_not_spend_limit(self) -> None:
+        module, module_api, _ = self.create_module(
+            email_invites={"max_emails": 2, "per_inviter_per_hour": 2}
+        )
+        two_emails = (
+            b'{"room_id":"!room:matrix.local",'
+            b'"emails":["a@example.com","b@example.com"]}'
+        )
+
+        status, _ = await self.render(
+            module,
+            b'{"room_id":"!room:matrix.local",'
+            b'"emails":["a@example.com","b@example.com","c@example.com"]}',
+        )
+        self.assertEqual(status, 400)
+
+        module_api.get_room_state.return_value = room_state(join_rule="invite")
+        status, _ = await self.render(module, two_emails)
+        self.assertEqual(status, 403)
+
+        module_api.get_room_state.return_value = room_state()
+        status, _ = await self.render(module, two_emails)
+        self.assertEqual(status, 202)
