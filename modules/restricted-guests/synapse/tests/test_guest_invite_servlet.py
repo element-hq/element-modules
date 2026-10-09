@@ -8,12 +8,12 @@ from typing import Any, Dict, Optional, Tuple, cast
 from unittest.mock import Mock
 
 import aiounittest
-from synapse.api.errors import HttpResponseException, LimitExceededError
+from synapse.api.errors import Codes, HttpResponseException, LimitExceededError
 from synapse.api.room_versions import RoomVersions
 from synapse.events import make_event_from_dict
 from synapse.http import RequestTimedOutError
 from synapse.http.site import SynapseRequest
-from synapse.module_api import EventBase, StateMap
+from synapse.module_api import NOT_SPAM, EventBase, StateMap
 from twisted.web.test.requesthelper import DummyRequest
 
 from synapse_guest_module import GuestModule
@@ -99,6 +99,18 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
         module_api._hs.get_clock.return_value.time.return_value = 0.0
         datastore = module_api._hs.get_datastores.return_value.main
         datastore.get_ratelimit_for_user.return_value = make_awaitable(None)
+        module_api._hs.config.server.block_non_admin_invites = False
+        module_api._hs.get_auth.return_value.is_server_admin.return_value = (
+            make_awaitable(False)
+        )
+        spam_checker = module_api._hs.get_module_api_callbacks.return_value.spam_checker
+        spam_checker.user_may_send_3pid_invite.return_value = make_awaitable(NOT_SPAM)
+        third_party_rules = (
+            module_api._hs.get_module_api_callbacks.return_value.third_party_event_rules
+        )
+        third_party_rules.check_threepid_can_be_invited.return_value = make_awaitable(
+            True
+        )
         module_api.get_room_state.return_value = room_state()
         module_api.http_client.post_urlencoded_get_json.return_value = {
             "access_token": "mas_admin_token"
@@ -411,3 +423,81 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
         status, response = await self.render(module)
 
         self.assertEqual(status, 502)
+
+    async def test_block_non_admin_invites(self) -> None:
+        module, module_api, _ = self.create_module()
+        module_api._hs.config.server.block_non_admin_invites = True
+
+        status, response = await self.render(module)
+
+        self.assertEqual(status, 403)
+        self.assertEqual(response, {"msg": "Invites have been disabled on this server"})
+        module_api.http_client.post_json_get_json.assert_not_called()
+
+    async def test_block_non_admin_invites_admin(self) -> None:
+        module, module_api, _ = self.create_module()
+        module_api._hs.config.server.block_non_admin_invites = True
+        auth = module_api._hs.get_auth.return_value
+        auth.is_server_admin.return_value = make_awaitable(True)
+
+        status, response = await self.render(module)
+
+        self.assertEqual(status, 202)
+        auth.is_server_admin.assert_called_once_with(
+            module_api.get_user_by_req.return_value
+        )
+
+    async def test_spam_checker_refuses_address(self) -> None:
+        module, module_api, _ = self.create_module()
+
+        async def user_may_send_3pid_invite(
+            inviter_userid: str, medium: str, address: str, room_id: str
+        ) -> Any:
+            if address == "bob@example.com":
+                return Codes.FORBIDDEN, {}
+            return NOT_SPAM
+
+        spam_checker = module_api._hs.get_module_api_callbacks.return_value.spam_checker
+        spam_checker.user_may_send_3pid_invite.side_effect = user_may_send_3pid_invite
+
+        status, response = await self.render(
+            module,
+            b'{"room_id":"!room:matrix.local",'
+            b'"emails":["alice@example.com","bob@example.com"]}',
+        )
+
+        self.assertEqual(status, 403)
+        spam_checker.user_may_send_3pid_invite.assert_any_call(
+            inviter_userid=INVITER,
+            medium="email",
+            address="bob@example.com",
+            room_id=ROOM_ID,
+        )
+        module_api.http_client.post_json_get_json.assert_not_called()
+
+    async def test_third_party_rules_refuse_address(self) -> None:
+        module, module_api, _ = self.create_module()
+
+        async def check_threepid_can_be_invited(
+            medium: str, address: str, room_id: str
+        ) -> bool:
+            return address != "bob@example.com"
+
+        third_party_rules = (
+            module_api._hs.get_module_api_callbacks.return_value.third_party_event_rules
+        )
+        third_party_rules.check_threepid_can_be_invited.side_effect = (
+            check_threepid_can_be_invited
+        )
+
+        status, response = await self.render(
+            module,
+            b'{"room_id":"!room:matrix.local",'
+            b'"emails":["alice@example.com","bob@example.com"]}',
+        )
+
+        self.assertEqual(status, 403)
+        third_party_rules.check_threepid_can_be_invited.assert_any_call(
+            medium="email", address="bob@example.com", room_id=ROOM_ID
+        )
+        module_api.http_client.post_json_get_json.assert_not_called()
