@@ -136,8 +136,8 @@ clients:
 
 `POST /_synapse/client/invite_guests` invites a list of email addresses to ask to
 join a room as guests. It's served when `email_invites.enabled` is set, and needs the
-`mas` configuration above: MAS mints the invite codes, sends the emails and registers
-the guests. MAS has to support guest invites and have them turned on: otherwise this
+`mas` configuration above. MAS mints the invite codes, sends the emails and registers
+the guests. MAS has to support guest invites and have them turned on, otherwise this
 endpoint answers 404.
 
 ```json
@@ -148,7 +148,7 @@ endpoint answers 404.
 ```
 
 The caller must be joined to the room and meet its `invite` power level, the same
-as for inviting a user directly, and can't be a guest. The room's join rule must be
+as for inviting a user directly, and can't be a guest themselves. The room's join rule must be
 `knock` (Ask to join), and the room can't be in `rooms_forbidden_to_guests`.
 Addresses are deduplicated ignoring case, and each counts once against `max_emails`
 and `per_inviter_per_hour`.
@@ -166,8 +166,7 @@ links only ever reach the recipients, so they are not in the response:
 ```
 
 A recipient who follows their link signs up as the guest the code names, or signs
-in with an existing account, and lands on the room. There they ask to join, and a
-member who can invite approves them. Nothing exists on this homeserver until they
+in with an existing account, and lands on the room. Nothing exists on this homeserver until they
 sign up, and this endpoint doesn't send a room invite.
 
 | Status | When                                                                                                                                                                                                                      |
@@ -178,30 +177,9 @@ sign up, and this endpoint doesn't send a room invite.
 | 429    | The caller is over `per_inviter_per_hour`. The body is Synapse's usual rate-limit error, with `retry_after_ms`.                                                                                                           |
 | 502    | MAS failed or couldn't be reached                                                                                                                                                                                         |
 
-The user reaper doesn't deactivate guests who signed up from an invite email: it
-only knows about the guests `register_guest` creates. List them with MAS' admin API,
-`GET /api/admin/v1/users?filter[search]=guest-`, and deactivate them there.
-
-Sending the emails needs MAS' task worker running. `mas-cli server` runs it unless
-started with `--no-worker`, and [`mas-cli worker`](https://element-hq.github.io/matrix-authentication-service/reference/cli/worker.html)
-runs it on its own. MAS also needs an [email
-sender](https://element-hq.github.io/matrix-authentication-service/reference/configuration.html#email).
-
-### Deployment checklist
-
-1. Give the module access to MAS, as in [Module configuration](#module-configuration): the module's client in MAS' `policy.data.admin_clients`, and the module's `mas` block.
-2. In MAS, set `guest_invites.enabled` and `guest_invites.client_room_url`, so that a link lands on its room in your client.
-3. Set `email_invites.enabled` only on a server with closed registration. Anyone who can register can create a knock room, and then have your server email `max_emails` addresses per request about it, with a room name and display name they chose. `per_inviter_per_hour` doesn't stop someone with many accounts.
-
-    Set `enable_guest_registration: false` only once the Element Web module's `guest_registration` flag has shipped and is off: until then, its login footer still calls `register_guest`.
-
-4. In Element Web's `config.json`, set `"features": {"feature_ask_to_join": true}`. Without it, rooms can't be set to Ask to join, invitees aren't offered to ask, and members aren't shown the requests.
-5. Use the same guest prefix in the module's `user_id_prefix` and the Element Web module's `guest_user_prefix` (with `@`).
-6. **Invite colleagues by Matrix ID, not by email.** Tell colleagues who get an invite email to choose Sign in, not the guest form. A guest account created with a colleague's address blocks that colleague's first sign-in with SSO, at "email in use".
-7. Check MAS' policy data. Guests sign up through MAS' password registration, even without a password, so its registration policy applies to them. `policy.data.allowed_domains`, `banned_domains` and `emails` can refuse the invited address: a list that keeps self-registration to staff refuses every guest. `registration.allowed_usernames` and `banned_usernames` can refuse the guest's username: banning the guest prefix refuses every invite. MAS also checks the policy when it mints the invites, so the endpoint answers 400 naming the refusal. Policy data changed after an invite was sent still refuses the invitee on the guest form.
-8. Set up SPF, DKIM and DMARC for the domain MAS sends email from.
-9. Don't turn on MAS' `experimental.inactive_session_expiration.expire_user_sessions`. A guest's only way back in is their MAS browser session.
-10. Set `hide_room_directory_from_guests: true`, and list the rooms guests mustn't reach in `rooms_forbidden_to_guests`. A guest can ask to join any knock room they can name, local or remote, not only the rooms they were invited to.
+The user reaper doesn't deactivate guests who signed up from an invite email, it
+only knows about the guests `register_guest` creates. They can be manually deactivated
+by listing them with MAS' admin API, `GET /api/admin/v1/users?filter[search]=guest-`, and deactivating from there.
 
 ## Production installation
 
