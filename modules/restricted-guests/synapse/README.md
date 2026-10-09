@@ -149,7 +149,7 @@ endpoint answers 404.
 
 The caller must be joined to the room and meet its `invite` power level, the same
 as for inviting a user directly, and can't be a guest themselves. The room's join rule must be
-`knock` (Ask to join), and the room can't be in `rooms_forbidden_to_guests`.
+`knock` or `knock_restricted` (Ask to join), and the room can't be in `rooms_forbidden_to_guests`.
 Addresses are deduplicated ignoring case, and each counts once against `max_emails`
 and `per_inviter_per_hour`.
 
@@ -169,13 +169,13 @@ A recipient who follows their link signs up as the guest the code names, or sign
 in with an existing account, and lands on the room. Nothing exists on this homeserver until they
 sign up, and this endpoint doesn't send a room invite.
 
-| Status | When                                                                                                                                                                                                                      |
-| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 400    | `room_id` or `emails` is missing or malformed, there are more than `max_emails` addresses, or MAS refuses the request, with its message in `msg`                                                                          |
-| 403    | The caller is a guest, isn't joined to the room or is below its `invite` level, or the room is forbidden to guests or its join rule isn't `knock`. For the join rule, the body also has `"reason": "room_not_knockable"`. |
-| 404    | MAS has guest invites turned off                                                                                                                                                                                          |
-| 429    | The caller is over `per_inviter_per_hour`. The body is Synapse's usual rate-limit error, with `retry_after_ms`.                                                                                                           |
-| 502    | MAS failed or couldn't be reached                                                                                                                                                                                         |
+| Status | When                                                                                                                                                                                                                                            |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 400    | `room_id` or `emails` is missing or malformed, there are more than `max_emails` addresses, or MAS refuses the request, with its message in `msg`                                                                                                |
+| 403    | The caller is a guest, isn't joined to the room or is below its `invite` level, or the room is forbidden to guests or its join rule isn't `knock` or `knock_restricted`. For the join rule, the body also has `"reason": "room_not_knockable"`. |
+| 404    | MAS has guest invites turned off                                                                                                                                                                                                                |
+| 429    | The caller is over `per_inviter_per_hour`. The body is Synapse's usual rate-limit error, with `retry_after_ms`.                                                                                                                                 |
+| 502    | MAS failed or couldn't be reached                                                                                                                                                                                                               |
 
 The user reaper doesn't deactivate guests who signed up from an invite email, it
 only knows about the guests `register_guest` creates. They can be manually deactivated

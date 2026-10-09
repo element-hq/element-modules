@@ -119,10 +119,12 @@ class GuestInviteServlet(DirectServeJsonResource):
         if not self._may_invite(user_id, state):
             return 403, {"msg": "You are not allowed to invite users to this room"}
 
-        # An email-invited guest has no Matrix invite, so it gets in by asking to
-        # join, and Element Web offers that only for `knock`, not `knock_restricted`
+        # An email-invited guest has no Matrix invite, so it gets in by asking to join
         join_rules = state.get((EventTypes.JoinRules, ""))
-        if join_rules is None or join_rules.content.get("join_rule") != JoinRules.KNOCK:
+        if join_rules is None or join_rules.content.get("join_rule") not in (
+            JoinRules.KNOCK,
+            JoinRules.KNOCK_RESTRICTED,
+        ):
             return 403, {
                 "msg": "Guests can only be invited to rooms they can ask to join",
                 "reason": "room_not_knockable",

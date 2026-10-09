@@ -174,6 +174,14 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
 
         status, response = await self.render(module)
 
+        self.assertEqual(status, 202)
+
+    async def test_public_room(self) -> None:
+        module, module_api, _ = self.create_module()
+        module_api.get_room_state.return_value = room_state(join_rule="public")
+
+        status, response = await self.render(module)
+
         self.assertEqual(status, 403)
         self.assertEqual(response["reason"], "room_not_knockable")
         module_api.http_client.post_json_get_json.assert_not_called()
