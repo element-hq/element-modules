@@ -9,6 +9,7 @@ import secrets
 import string
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from synapse.api.constants import EventContentFields, EventTypes, JoinRules, Membership
 from synapse.api.errors import HttpResponseException
 from synapse.api.ratelimiting import Ratelimiter
 from synapse.config.ratelimiting import RatelimitSettings
@@ -122,11 +123,11 @@ class GuestInviteServlet(DirectServeJsonResource):
         state = await self._api.get_room_state(
             room_id,
             [
-                ("m.room.create", ""),
-                ("m.room.join_rules", ""),
-                ("m.room.member", user_id),
-                ("m.room.name", ""),
-                ("m.room.power_levels", ""),
+                (EventTypes.Create, ""),
+                (EventTypes.JoinRules, ""),
+                (EventTypes.Member, user_id),
+                (EventTypes.Name, ""),
+                (EventTypes.PowerLevels, ""),
             ],
         )
         if not self._may_invite(user_id, state):
@@ -134,8 +135,8 @@ class GuestInviteServlet(DirectServeJsonResource):
 
         # An email-invited guest has no Matrix invite, so it gets in by asking to
         # join, and Element Web offers that only for `knock`, not `knock_restricted`
-        join_rules = state.get(("m.room.join_rules", ""))
-        if join_rules is None or join_rules.content.get("join_rule") != "knock":
+        join_rules = state.get((EventTypes.JoinRules, ""))
+        if join_rules is None or join_rules.content.get("join_rule") != JoinRules.KNOCK:
             return 403, {
                 "msg": "Guests can only be invited to rooms they can ask to join",
                 "reason": "room_not_knockable",
@@ -172,9 +173,12 @@ class GuestInviteServlet(DirectServeJsonResource):
         logger.info(
             "'%s' is inviting %d guest(s) to '%s'", user_id, len(invites), room_id
         )
-        room_name = _non_empty_string(state.get(("m.room.name", "")), "name")
+        room_name = _non_empty_string(
+            state.get((EventTypes.Name, "")), EventContentFields.ROOM_NAME
+        )
         inviter_name = _non_empty_string(
-            state.get(("m.room.member", user_id)), "displayname"
+            state.get((EventTypes.Member, user_id)),
+            EventContentFields.MEMBERSHIP_DISPLAYNAME,
         )
         try:
             # Outside the inner `try`, because a refused token request is between
@@ -214,8 +218,11 @@ class GuestInviteServlet(DirectServeJsonResource):
         """
         # A room this server isn't in has no state, not even the create event
         # that `get_user_power_level` asserts
-        member = state.get(("m.room.member", user_id))
-        if member is None or member.content.get("membership") != "join":
+        member = state.get((EventTypes.Member, user_id))
+        if (
+            member is None
+            or member.content.get(EventContentFields.MEMBERSHIP) != Membership.JOIN
+        ):
             return False
 
         return get_user_power_level(user_id, state) >= get_named_level(
