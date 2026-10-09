@@ -9,9 +9,10 @@ from unittest.mock import Mock
 
 import aiounittest
 import attr
-from synapse.logging.context import ContextRequest, LoggingContext
+from synapse.logging.context import ContextRequest
 from synapse.module_api import ModuleApi, UserID
 from synapse.module_api.errors import ConfigError
+from synapse.synapse_rust.logcontext import LoggingContext
 
 from synapse_guest_module.room_list_patch import (
     PATCHED_METHODS,
