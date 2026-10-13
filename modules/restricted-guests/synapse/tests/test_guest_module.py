@@ -44,6 +44,7 @@ class GuestModuleConfigTest(aiounittest.AsyncTestCase):
             {
                 "user_id_prefix": "tmp-",
                 "display_name_suffix": " (Temporary)",
+                "enable_guest_registration": False,
                 "enable_user_reaper": False,
                 "user_expiration_seconds": 100,
                 "rooms_forbidden_to_guests": ["!forbidden:matrix.local"],
@@ -59,6 +60,7 @@ class GuestModuleConfigTest(aiounittest.AsyncTestCase):
                 user_expiration_seconds=100,
                 mas=None,
                 rooms_forbidden_to_guests=frozenset({"!forbidden:matrix.local"}),
+                enable_guest_registration=False,
             ),
         )
 
@@ -107,6 +109,16 @@ class GuestModuleConfigTest(aiounittest.AsyncTestCase):
             GuestModule.parse_config(
                 {
                     "display_name_suffix": 1234,
+                }
+            )
+
+    async def test_parse_config_fail_enable_guest_registration(self) -> None:
+        with self.assertRaisesRegex(
+            ConfigError, "Config option 'enable_guest_registration' must be a bool"
+        ):
+            GuestModule.parse_config(
+                {
+                    "enable_guest_registration": "False",
                 }
             )
 
@@ -193,6 +205,23 @@ class GuestModuleRuntimeTest(aiounittest.AsyncTestCase):
         config_override = dict(self.config_override or {})
         config_override["rooms_forbidden_to_guests"] = [FORBIDDEN_ROOM]
         return create_module(config_override)
+
+    async def test_register_guest_mounted_by_default(self) -> None:
+        module, module_api, _ = self.create_module()
+
+        module_api.register_web_resource.assert_any_call(
+            "/_synapse/client/register_guest", module.registration_servlet
+        )
+
+    async def test_register_guest_not_mounted_when_disabled(self) -> None:
+        config_override = dict(self.config_override or {})
+        config_override["enable_guest_registration"] = False
+        _, module_api, _ = create_module(config_override)
+
+        self.assertNotIn(
+            "/_synapse/client/register_guest",
+            [c.args[0] for c in module_api.register_web_resource.call_args_list],
+        )
 
     async def test_profile_update_no_guest(self) -> None:
         module, module_api, _ = self.create_module()
