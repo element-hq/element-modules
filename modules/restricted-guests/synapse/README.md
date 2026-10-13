@@ -157,17 +157,18 @@ Synapse's email-invite controls (`block_non_admin_invites`,
 `user_may_send_3pid_invite`, `check_threepid_can_be_invited`,
 `rc_third_party_invite`) don't apply to this endpoint.
 
-Each address gets an invite code of its own, pinned to that address and to a fresh
-guest localpart, which MAS emails a link for, naming the room and the caller. The
-links only ever reach the recipients, so they are not in the response:
+Each address gets an invite code of its own, pinned to that address, which MAS emails
+a link for, naming the room and the caller. The links only ever reach the recipients,
+so they are not in the response:
 
 ```json
 { "scheduled": 2 }
 ```
 
-A recipient who follows their link signs up as the guest the code names, or signs
-in with an existing account, and lands on the room. Nothing exists on this homeserver until they
-sign up, and this endpoint doesn't send a room invite.
+A recipient who follows their link signs up as a guest, or signs in with an existing
+account, and lands on the room. Nothing exists on this homeserver until they sign up,
+and this endpoint doesn't send a room invite. MAS assigns the guest's localpart, starting
+with `user_id_prefix`, when they sign up, once per address however many invites it gets.
 
 | Status | When                                                                                                                                                                                                                                            |
 | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

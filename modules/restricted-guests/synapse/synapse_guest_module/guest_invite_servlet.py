@@ -5,9 +5,7 @@
 
 import json
 import logging
-import secrets
-import string
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 
 from synapse.api.constants import EventContentFields, EventTypes, JoinRules, Membership
 from synapse.api.errors import HttpResponseException
@@ -34,10 +32,9 @@ class GuestInviteServlet(DirectServeJsonResource):
     addresses to a room as guests. It requires the `room_id` and `emails`
     properties.
 
-    Each address is emailed a link to register as one specific guest, which MAS
-    mints an invite code for and sends out. Nothing exists on this homeserver
-    until a recipient follows their link: the localparts are only reserved by
-    the invite codes they are pinned to.
+    Each address is emailed a link to register as a guest, which MAS mints an
+    invite code for and sends out. Nothing exists on this homeserver until a
+    recipient follows their link, and MAS assigns the guest's localpart then.
     """
 
     def __init__(
@@ -68,9 +65,8 @@ class GuestInviteServlet(DirectServeJsonResource):
     async def _async_render_POST(
         self, request: SynapseRequest
     ) -> Tuple[int, Dict[str, Any]]:
-        """Generate a guest localpart per address, have MAS
-        mint an invite code for each and email out the links.
-        Email sending is handled by MAS.
+        """Have MAS mint an invite code per address and email out the links.
+        MAS assigns each guest's localpart from the username template.
         """
 
         requester = await self._api.get_user_by_req(request)
@@ -136,13 +132,11 @@ class GuestInviteServlet(DirectServeJsonResource):
         # Last, so that a refused request doesn't spend the limit
         await self._ratelimiter.ratelimit(requester, n_actions=len(unique_emails))
 
-        invites: List[Dict[str, str]] = []
-        for email in unique_emails.values():
-            localpart = self._config.user_id_prefix + "".join(
-                secrets.choice(string.ascii_lowercase + string.digits)
-                for _ in range(32)
-            )
-            invites.append({"email": email, "username": localpart})
+        # MAS fills in `{random}` when the guest registers
+        username = f"{self._config.user_id_prefix}{{random}}"
+        invites = [
+            {"email": email, "username": username} for email in unique_emails.values()
+        ]
 
         logger.info(
             "'%s' is inviting %d guest(s) to '%s'", user_id, len(invites), room_id
