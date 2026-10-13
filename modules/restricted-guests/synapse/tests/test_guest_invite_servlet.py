@@ -239,7 +239,7 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
         self.assertEqual(status, 202)
 
     async def test_success(self) -> None:
-        module, module_api, _ = self.create_module()
+        module, module_api, _ = self.create_module({"user_id_prefix": "visitor-"})
         module_api.get_room_state.return_value = room_state(
             power_levels={"invite": 50, "users": {INVITER: 100}},
             name="Project X",
@@ -258,7 +258,7 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
         module_api.http_client.post_json_get_json.assert_called_once()
         call = module_api.http_client.post_json_get_json.call_args
         self.assertEqual(
-            call.kwargs["uri"], "https://mas.example.org/api/admin/v1/invite-guests"
+            call.kwargs["uri"], "https://mas.example.org/api/admin/v1/room-invites"
         )
         body = call.kwargs["post_json"]
         self.assertEqual(body["room_id"], ROOM_ID)
@@ -269,11 +269,10 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
             [invite["email"] for invite in body["invites"]],
             ["alice@example.com", "bob@example.com"],
         )
-        # Each recipient is pinned to a guest localpart of their own
-        usernames = [invite["username"] for invite in body["invites"]]
-        for username in usernames:
-            self.assertRegex(username, r"^guest-[a-z0-9]{32}$")
-        self.assertEqual(len(set(usernames)), 2)
+        self.assertEqual(
+            [invite["username"] for invite in body["invites"]],
+            ["visitor-{random}", "visitor-{random}"],
+        )
 
     async def test_invalid_names_left_out(self) -> None:
         module, module_api, _ = self.create_module()

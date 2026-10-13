@@ -113,7 +113,7 @@ class MasAdminClient:
             ValueError: If the response has no `scheduled` count.
             HttpResponseException: On a non-2xx HTTP response.
         """
-        url = self._build_admin_url("/api/admin/v1/invite-guests")
+        url = self._build_admin_url("/api/admin/v1/room-invites")
 
         body: dict[str, Any] = {
             "room_id": room_id,

@@ -75,7 +75,7 @@ API](https://element-hq.github.io/matrix-authentication-service/topics/admin-api
     - `client_secret_filepath` - path to a plaintext file containing the client secret. If set, this is used instead of `client_secret`.
 
 - `email_invites` - optional configuration for [inviting guests by email](#inviting-guests-by-email). Requires `mas`.
-    - `enabled` - if true, the module serves `/_synapse/client/invite_guests`. Only enable it on a server with closed registration (see the [deployment checklist](#deployment-checklist)). Default: `false`.
+    - `enabled` - if true, the module serves `/_synapse/client/invite_guests`. Only enable it on a server with closed registration. Default: `false`.
     - `max_emails` - the most addresses one request can invite. It can't exceed `per_inviter_per_hour`. Default: `20`.
     - `per_inviter_per_hour` - how many addresses one user can invite per hour, on average. Up to this many can go at once, and the allowance then refills over the next hour, so one hour can see nearly twice this many. Each worker counts separately, and the count resets when Synapse restarts. Default: `50`.
 
@@ -137,8 +137,8 @@ clients:
 `POST /_synapse/client/invite_guests` invites a list of email addresses to ask to
 join a room as guests. It's served when `email_invites.enabled` is set, and needs the
 `mas` configuration above. MAS mints the invite codes, sends the emails and registers
-the guests. MAS has to support guest invites and have them turned on, otherwise this
-endpoint answers 404.
+the guests. MAS has to serve `POST /api/admin/v1/room-invites` and have room invites
+turned on, otherwise this endpoint answers 404.
 
 ```json
 {
@@ -153,23 +153,24 @@ as for inviting a user directly, and can't be a guest themselves. The room's joi
 Addresses are deduplicated ignoring case, and each counts once against `max_emails`
 and `per_inviter_per_hour`.
 
-Each address gets an invite code of its own, pinned to that address and to a fresh
-guest localpart, which MAS emails a link for, naming the room and the caller. The
-links only ever reach the recipients, so they are not in the response:
+Each address gets an invite code of its own, pinned to that address, which MAS emails
+a link for, naming the room and the caller. The links only ever reach the recipients,
+so they are not in the response:
 
 ```json
 { "scheduled": 2 }
 ```
 
-A recipient who follows their link signs up as the guest the code names, or signs
-in with an existing account, and lands on the room. Nothing exists on this homeserver until they
-sign up, and this endpoint doesn't send a room invite.
+A recipient who follows their link signs up as a guest, or signs in with an existing
+account, and lands on the room. Nothing exists on this homeserver until they sign up,
+and this endpoint doesn't send a room invite. MAS assigns the guest's localpart, starting
+with `user_id_prefix`, when they sign up, once per address however many invites it gets.
 
 | Status | When                                                                                                                                                                                                                                                                                                            |
 | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 400    | `room_id` or `emails` is missing or malformed, there are more than `max_emails` addresses, or MAS refuses the request, with its message in `msg`                                                                                                                                                                |
 | 403    | The caller is a guest, isn't joined to the room or is below its `invite` level, or the room is forbidden to guests or its join rule isn't `knock` or `knock_restricted`. For the join rule, the body also has `"reason": "room_not_knockable"`. Synapse's own invite controls can refuse a request too (below). |
-| 404    | MAS has guest invites turned off                                                                                                                                                                                                                                                                                |
+| 404    | MAS doesn't serve room invites, or has them turned off                                                                                                                                                                                                                                                          |
 | 429    | The caller is over `per_inviter_per_hour`. The body is Synapse's usual rate-limit error, with `retry_after_ms`. Users Synapse exempts from rate limits, through the admin API's rate-limit override or an application service with `rate_limited: false`, aren't limited.                                       |
 | 502    | MAS failed or couldn't be reached                                                                                                                                                                                                                                                                               |
 
