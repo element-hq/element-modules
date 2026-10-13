@@ -75,7 +75,7 @@ API](https://element-hq.github.io/matrix-authentication-service/topics/admin-api
     - `client_secret_filepath` - path to a plaintext file containing the client secret. If set, this is used instead of `client_secret`.
 
 - `email_invites` - optional configuration for [inviting guests by email](#inviting-guests-by-email). Requires `mas`.
-    - `enabled` - if true, the module serves `/_synapse/client/invite_guests`. Only enable it on a server with closed registration (see the [deployment checklist](#deployment-checklist)). Default: `false`.
+    - `enabled` - if true, the module serves `/_synapse/client/invite_guests`. Only enable it on a server with closed registration. Default: `false`.
     - `max_emails` - the most addresses one request can invite. It can't exceed `per_inviter_per_hour`. Default: `20`.
     - `per_inviter_per_hour` - how many addresses one user can invite per hour, on average. Up to this many can go at once, and the allowance then refills over the next hour, so one hour can see nearly twice this many. Each worker counts separately, and the count resets when Synapse restarts. Default: `50`.
 
