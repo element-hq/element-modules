@@ -137,8 +137,8 @@ clients:
 `POST /_synapse/client/invite_guests` invites a list of email addresses to ask to
 join a room as guests. It's served when `email_invites.enabled` is set, and needs the
 `mas` configuration above. MAS mints the invite codes, sends the emails and registers
-the guests. MAS has to support guest invites and have them turned on, otherwise this
-endpoint answers 404.
+the guests. MAS has to serve `POST /api/admin/v1/room-invites` and have room invites
+turned on, otherwise this endpoint answers 404.
 
 ```json
 {
@@ -174,7 +174,7 @@ with `user_id_prefix`, when they sign up, once per address however many invites 
 | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 400    | `room_id` or `emails` is missing or malformed, there are more than `max_emails` addresses, or MAS refuses the request, with its message in `msg`                                                                                                |
 | 403    | The caller is a guest, isn't joined to the room or is below its `invite` level, or the room is forbidden to guests or its join rule isn't `knock` or `knock_restricted`. For the join rule, the body also has `"reason": "room_not_knockable"`. |
-| 404    | MAS has guest invites turned off                                                                                                                                                                                                                |
+| 404    | MAS doesn't serve room invites, or has them turned off                                                                                                                                                                                          |
 | 429    | The caller is over `per_inviter_per_hour`. The body is Synapse's usual rate-limit error, with `retry_after_ms`.                                                                                                                                 |
 | 502    | MAS failed or couldn't be reached                                                                                                                                                                                                               |
 

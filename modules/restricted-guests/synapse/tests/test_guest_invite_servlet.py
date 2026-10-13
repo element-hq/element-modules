@@ -246,7 +246,7 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
         module_api.http_client.post_json_get_json.assert_called_once()
         call = module_api.http_client.post_json_get_json.call_args
         self.assertEqual(
-            call.kwargs["uri"], "https://mas.example.org/api/admin/v1/invite-guests"
+            call.kwargs["uri"], "https://mas.example.org/api/admin/v1/room-invites"
         )
         body = call.kwargs["post_json"]
         self.assertEqual(body["room_id"], ROOM_ID)
