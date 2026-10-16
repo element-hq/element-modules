@@ -4,7 +4,7 @@
 # Please see LICENSE files in the project root for full details.
 
 import io
-from typing import Any, Dict, Optional, Tuple, cast
+from typing import Any, Dict, List, Optional, Tuple, cast
 from unittest.mock import Mock
 
 import aiounittest
@@ -22,6 +22,24 @@ from tests import SQLiteStore, create_module, make_awaitable, mas_config_overrid
 ROOM_ID = "!room:matrix.local"
 INVITER = "@inviter:matrix.local"
 CREATOR = "@creator:matrix.local"
+MINT_URI = "https://mas.example.org/api/admin/v1/user-registration-tokens"
+SEND_URI = "https://mas.example.org/api/admin/v1/user-registration-tokens/invite-emails"
+
+
+def mas_response(uri: str, post_json: Dict[str, Any], **kwargs: Any) -> Any:
+    """MAS's answer to a mint, naming the token after its address, or to a send"""
+    if uri == MINT_URI:
+        return {"data": {"id": f"token-{post_json['email']}"}}
+    return {"scheduled": len(post_json["invites"])}
+
+
+def mas_calls(module_api: Mock, uri: str) -> List[Dict[str, Any]]:
+    """The bodies posted to this MAS URI"""
+    return [
+        call.kwargs["post_json"]
+        for call in module_api.http_client.post_json_get_json.call_args_list
+        if call.kwargs["uri"] == uri
+    ]
 
 
 def state_event(
@@ -103,7 +121,7 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
         module_api.http_client.post_urlencoded_get_json.return_value = {
             "access_token": "mas_admin_token"
         }
-        module_api.http_client.post_json_get_json.return_value = {"scheduled": 2}
+        module_api.http_client.post_json_get_json.side_effect = mas_response
 
         return module, module_api, store
 
@@ -243,24 +261,46 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
         self.assertEqual(status, 202)
         self.assertEqual(response, {"scheduled": 2})
 
-        module_api.http_client.post_json_get_json.assert_called_once()
-        call = module_api.http_client.post_json_get_json.call_args
         self.assertEqual(
-            call.kwargs["uri"], "https://mas.example.org/api/admin/v1/room-invites"
+            mas_calls(module_api, MINT_URI),
+            [
+                {
+                    "email": email,
+                    "username": "visitor-{random}",
+                    "passwordless": True,
+                    "usage_limit": 1,
+                    "expires_at": "1970-01-08T00:00:00+00:00",
+                    "room_id": ROOM_ID,
+                }
+                for email in ["alice@example.com", "bob@example.com"]
+            ],
         )
-        body = call.kwargs["post_json"]
-        self.assertEqual(body["room_id"], ROOM_ID)
-        self.assertEqual(body["room_name"], "Project X")
-        self.assertEqual(body["inviter"], INVITER)
-        self.assertEqual(body["inviter_name"], "Alice")
         self.assertEqual(
-            [invite["email"] for invite in body["invites"]],
-            ["alice@example.com", "bob@example.com"],
+            mas_calls(module_api, SEND_URI),
+            [
+                {
+                    "invites": [
+                        {"registration_token_id": "token-alice@example.com"},
+                        {"registration_token_id": "token-bob@example.com"},
+                    ],
+                    "room_name": "Project X",
+                    "inviter": INVITER,
+                    "inviter_name": "Alice",
+                }
+            ],
         )
-        self.assertEqual(
-            [invite["username"] for invite in body["invites"]],
-            ["visitor-{random}", "visitor-{random}"],
+
+    async def test_invite_lifetime(self) -> None:
+        module, module_api, _ = self.create_module(
+            email_invites={"invite_lifetime": 3600}
         )
+        module_api._hs.get_clock.return_value.time.return_value = 60.0
+
+        status, response = await self.render(module)
+
+        self.assertEqual(status, 202)
+        [mint] = mas_calls(module_api, MINT_URI)
+        self.assertEqual(mint["expires_at"], "1970-01-01T01:01:00+00:00")
 
     async def test_invalid_names_left_out(self) -> None:
         module, module_api, _ = self.create_module()
@@ -269,8 +309,8 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
         status, response = await self.render(module)
 
         self.assertEqual(status, 202)
-        body = module_api.http_client.post_json_get_json.call_args.kwargs["post_json"]
-        self.assertEqual(set(body), {"room_id", "inviter", "invites"})
+        [body] = mas_calls(module_api, SEND_URI)
+        self.assertEqual(set(body), {"inviter", "invites"})
 
     async def test_duplicate_emails(self) -> None:
         module, module_api, _ = self.create_module(
@@ -284,9 +324,9 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
         )
 
         self.assertEqual(status, 202)
-        body = module_api.http_client.post_json_get_json.call_args.kwargs["post_json"]
         self.assertEqual(
-            [invite["email"] for invite in body["invites"]], ["Bob@example.com"]
+            [mint["email"] for mint in mas_calls(module_api, MINT_URI)],
+            ["Bob@example.com"],
         )
 
     async def test_too_many_emails(self) -> None:
@@ -323,7 +363,7 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
             module, b'{"room_id":"!room:matrix.local","emails":["c@example.com"]}'
         )
         self.assertEqual(status, 202)
-        self.assertEqual(module_api.http_client.post_json_get_json.call_count, 2)
+        self.assertEqual(len(mas_calls(module_api, SEND_URI)), 2)
 
     async def test_refused_request_does_not_spend_limit(self) -> None:
         module, module_api, _ = self.create_module(
@@ -349,15 +389,42 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
         status, _ = await self.render(module, two_emails)
         self.assertEqual(status, 202)
 
-    async def test_mas_bad_request(self) -> None:
+    async def test_mas_refuses_an_address(self) -> None:
         module, module_api, _ = self.create_module()
-        module_api.http_client.post_json_get_json.side_effect = HttpResponseException(
-            400, "Bad Request", b'{"errors":[{"title":"Invalid email address"}]}'
+
+        def refuse_bob(uri: str, post_json: Dict[str, Any], **kwargs: Any) -> Any:
+            if post_json.get("email") == "bob@example.com":
+                raise HttpResponseException(
+                    400, "Bad Request", b'{"errors":[{"title":"Email is banned"}]}'
+                )
+            return mas_response(uri, post_json)
+
+        module_api.http_client.post_json_get_json.side_effect = refuse_bob
+
+        status, response = await self.render(
+            module,
+            b'{"room_id":"!room:matrix.local",'
+            b'"emails":["alice@example.com","bob@example.com"]}',
         )
+
+        self.assertEqual((status, response), (400, {"msg": "Email is banned"}))
+        self.assertEqual(mas_calls(module_api, SEND_URI), [])
+
+    async def test_mas_refuses_the_send(self) -> None:
+        module, module_api, _ = self.create_module()
+
+        def refuse_send(uri: str, post_json: Dict[str, Any], **kwargs: Any) -> Any:
+            if uri == SEND_URI:
+                raise HttpResponseException(
+                    400, "Bad Request", b'{"errors":[{"title":"Token is revoked"}]}'
+                )
+            return mas_response(uri, post_json)
+
+        module_api.http_client.post_json_get_json.side_effect = refuse_send
 
         status, response = await self.render(module)
 
-        self.assertEqual((status, response), (400, {"msg": "Invalid email address"}))
+        self.assertEqual((status, response), (400, {"msg": "Token is revoked"}))
 
     async def test_mas_bad_request_unknown_body(self) -> None:
         module, module_api, _ = self.create_module()
@@ -369,7 +436,7 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
 
         self.assertEqual((status, response), (400, {"msg": "MAS refused the invites"}))
 
-    async def test_mas_invites_disabled(self) -> None:
+    async def test_mas_not_found(self) -> None:
         module, module_api, _ = self.create_module()
         module_api.http_client.post_json_get_json.side_effect = HttpResponseException(
             404, "Not Found", b'{"errors":[{"title":"Not found"}]}'
@@ -378,7 +445,7 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
         with self.assertLogs("synapse.contrib", "WARNING"):
             status, response = await self.render(module)
 
-        self.assertEqual(status, 404)
+        self.assertEqual(status, 502)
 
     async def test_mas_other_error(self) -> None:
         module, module_api, _ = self.create_module()

@@ -78,6 +78,7 @@ API](https://element-hq.github.io/matrix-authentication-service/topics/admin-api
     - `enabled` - if true, the module serves `/_synapse/client/invite_guests`. Only enable it on a server with closed registration. Default: `false`.
     - `max_emails` - the most addresses one request can invite. It can't exceed `per_inviter_per_hour`. Default: `20`.
     - `per_inviter_per_hour` - how many addresses one user can invite per hour, on average. Up to this many can go at once, and the allowance then refills over the next hour, so one hour can see nearly twice this many. Each worker counts separately, and the count resets when Synapse restarts. Default: `50`.
+    - `invite_lifetime` - how long an invite link stays valid, in seconds. Default: `604800` (7 days).
 
 Example configuration:
 
@@ -109,6 +110,7 @@ modules:
               enabled: true
               max_emails: 20
               per_inviter_per_hour: 50
+              invite_lifetime: 604800
 ```
 
 Enable [the Admin API on a MAS
@@ -136,9 +138,9 @@ clients:
 
 `POST /_synapse/client/invite_guests` invites a list of email addresses to ask to
 join a room as guests. It's served when `email_invites.enabled` is set, and needs the
-`mas` configuration above. MAS mints the invite codes, sends the emails and registers
-the guests. MAS has to serve `POST /api/admin/v1/room-invites` and have room invites
-turned on, otherwise this endpoint answers 404.
+`mas` configuration above. The module mints an invite code per address with
+`POST /api/admin/v1/user-registration-tokens`, then has MAS email them with
+`POST /api/admin/v1/user-registration-tokens/invite-emails`. MAS registers the guests.
 
 ```json
 {
@@ -157,9 +159,10 @@ Synapse's email-invite controls (`block_non_admin_invites`,
 `user_may_send_3pid_invite`, `check_threepid_can_be_invited`,
 `rc_third_party_invite`) don't apply to this endpoint.
 
-Each address gets an invite code of its own, pinned to that address, which MAS emails
-a link for, naming the room and the caller. The links only ever reach the recipients,
-so they are not in the response:
+Each address gets a single-use invite code of its own, pinned to that address and
+expiring after `invite_lifetime`, which MAS emails a link for, naming the room and the
+caller. Every code is minted before any email is sent, so an address MAS refuses sends
+no email at all. The links are not in the response:
 
 ```json
 { "scheduled": 2 }
@@ -174,9 +177,8 @@ with `user_id_prefix`, when they sign up, once per address however many invites 
 | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 400    | `room_id` or `emails` is missing or malformed, there are more than `max_emails` addresses, or MAS refuses the request, with its message in `msg`                                                                                                |
 | 403    | The caller is a guest, isn't joined to the room or is below its `invite` level, or the room is forbidden to guests or its join rule isn't `knock` or `knock_restricted`. For the join rule, the body also has `"reason": "room_not_knockable"`. |
-| 404    | MAS doesn't serve room invites, or has them turned off                                                                                                                                                                                          |
 | 429    | The caller is over `per_inviter_per_hour`. The body is Synapse's usual rate-limit error, with `retry_after_ms`.                                                                                                                                 |
-| 502    | MAS failed or couldn't be reached                                                                                                                                                                                                               |
+| 502    | MAS failed, couldn't be reached, or doesn't serve the endpoints above                                                                                                                                                                           |
 
 The user reaper doesn't deactivate guests who signed up from an invite email, it
 only knows about the guests `register_guest` creates. They can be manually deactivated
