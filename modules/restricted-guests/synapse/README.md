@@ -9,6 +9,7 @@ A [pluggable synapse module](https://element-hq.github.io/synapse/latest/modules
 3. The temporary users are limited in what they can do (examples: create room, invite users).
 4. The temporary users won't be returned by the user directory search results, and the temporary users themselves get an empty user directory: they should not be handed a browsable index of users they have no relationship with.
 5. The temporary users are disabled after an expiration timeout (default: `24 hours`).
+6. Provides an endpoint that invites people by email to ask to join a room, which MAS emails a personal invite link for (opt-in).
 
 ## Compatibility
 
@@ -73,6 +74,12 @@ API](https://element-hq.github.io/matrix-authentication-service/topics/admin-api
     - `client_secret` - client secret for the automated tool. Ideally long and cryptographically secure. Keep it a secret!
     - `client_secret_filepath` - path to a plaintext file containing the client secret. If set, this is used instead of `client_secret`.
 
+- `email_invites` - optional configuration for [inviting guests by email](#inviting-guests-by-email). Requires `mas`.
+    - `enabled` - if true, the module serves `/_synapse/client/invite_guests`. Only enable it on a server with closed registration. Default: `false`.
+    - `max_emails` - the most addresses one request can invite. It can't exceed `per_inviter_per_hour`. Default: `20`.
+    - `per_inviter_per_hour` - how many addresses one user can invite per hour, on average. Up to this many can go at once, and the allowance then refills over the next hour, so one hour can see nearly twice this many. Each worker counts separately, and the count resets when Synapse restarts. Default: `50`.
+    - `invite_lifetime` - how long an invite link stays valid, in seconds. Default: `604800` (7 days).
+
 Example configuration:
 
 ```yaml
@@ -98,6 +105,12 @@ modules:
               client_secret: your-client-secret
               # Alternatively, load the secret from a file:
               # client_secret_filepath: /run/secrets/mas-client-secret
+          # Invite guests by email (requires `mas`)
+          email_invites:
+              enabled: true
+              max_emails: 20
+              per_inviter_per_hour: 50
+              invite_lifetime: 604800
 ```
 
 Enable [the Admin API on a MAS
@@ -120,6 +133,56 @@ clients:
       client_auth_method: client_secret_basic
       client_secret: your-client-secret
 ```
+
+## Inviting guests by email
+
+`POST /_synapse/client/invite_guests` invites a list of email addresses to ask to
+join a room as guests. It's served when `email_invites.enabled` is set, and needs the
+`mas` configuration above. The module mints an invite code per address with
+`POST /api/admin/v1/user-registration-tokens`, then has MAS email them with
+`POST /api/admin/v1/user-registration-tokens/invite-emails`. MAS registers the guests.
+
+```json
+{
+    "room_id": "!room:example.org",
+    "emails": ["alice@example.com", "bob@example.com"]
+}
+```
+
+The caller must be joined to the room and meet its `invite` power level, the same
+as for inviting a user directly, and can't be a guest themselves. The room's join rule must be
+`knock` or `knock_restricted` (Ask to join), and the room can't be in `rooms_forbidden_to_guests`.
+Addresses are deduplicated ignoring case, and each counts once against `max_emails`
+and `per_inviter_per_hour`.
+
+Synapse's email-invite controls (`block_non_admin_invites`,
+`user_may_send_3pid_invite`, `check_threepid_can_be_invited`,
+`rc_third_party_invite`) don't apply to this endpoint.
+
+Each address gets a single-use invite code of its own, pinned to that address and
+expiring after `invite_lifetime`, which MAS emails a link for, naming the room and the
+caller. Every code is minted before any email is sent, so an address MAS refuses sends
+no email at all. The links are not in the response:
+
+```json
+{ "scheduled": 2 }
+```
+
+A recipient who follows their link signs up as a guest, or signs in with an existing
+account, and lands on the room. Nothing exists on this homeserver until they sign up,
+and this endpoint doesn't send a room invite. MAS assigns the guest's localpart, starting
+with `user_id_prefix`, when they sign up, once per address however many invites it gets.
+
+| Status | When                                                                                                                                                                                                                                            |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 400    | `room_id` or `emails` is missing or malformed, there are more than `max_emails` addresses, or MAS refuses the request, with its message in `msg`                                                                                                |
+| 403    | The caller is a guest, isn't joined to the room or is below its `invite` level, or the room is forbidden to guests or its join rule isn't `knock` or `knock_restricted`. For the join rule, the body also has `"reason": "room_not_knockable"`. |
+| 429    | The caller is over `per_inviter_per_hour`. The body is Synapse's usual rate-limit error, with `retry_after_ms`.                                                                                                                                 |
+| 502    | MAS failed, couldn't be reached, or doesn't serve the endpoints above                                                                                                                                                                           |
+
+The user reaper doesn't deactivate guests who signed up from an invite email, it
+only knows about the guests `register_guest` creates. They can be manually deactivated
+by listing them with MAS' admin API, `GET /api/admin/v1/users?filter[search]=guest-`, and deactivating from there.
 
 ## Production installation
 

@@ -7,6 +7,8 @@ import base64
 import logging
 import random
 import string
+from datetime import datetime
+from typing import Any, Optional
 
 from synapse.module_api import ModuleApi
 
@@ -85,6 +87,94 @@ class MasAdminClient:
             raise ValueError("MAS session response missing `access_token` field")
 
         return device_id, access_token
+
+    async def create_registration_token(
+        self,
+        email: str,
+        username: str,
+        room_id: str,
+        expires_at: datetime,
+        token: str,
+    ) -> str:
+        """Has MAS mint a single-use, passwordless invite code pinned to the address.
+
+        Args:
+            email: The address the invite code is pinned to.
+            username: The username, or username template, the recipient registers with.
+            room_id: The room the recipient is sent to once registered.
+            expires_at: When the invite code expires, timezone-aware.
+            token: An admin access token from `request_admin_token`.
+
+        Returns:
+            The ID of the minted invite code.
+
+        Raises:
+            ValueError: If the response has no `data.id`.
+            HttpResponseException: On a non-2xx HTTP response.
+        """
+        response = await self._api.http_client.post_json_get_json(
+            uri=self._build_admin_url("/api/admin/v1/user-registration-tokens"),
+            post_json={
+                "email": email,
+                "username": username,
+                "passwordless": True,
+                "usage_limit": 1,
+                "expires_at": expires_at.isoformat(),
+                "room_id": room_id,
+            },
+            headers={"Authorization": [f"Bearer {token}"]},
+        )
+
+        data = response.get("data")
+        token_id = data.get("id") if isinstance(data, dict) else None
+        if not isinstance(token_id, str):
+            raise ValueError("MAS registration token response missing `data.id` field")
+
+        return token_id
+
+    async def send_invite_emails(
+        self,
+        token_ids: list[str],
+        room_name: Optional[str],
+        inviter: str,
+        inviter_name: Optional[str],
+        token: str,
+    ) -> int:
+        """Has MAS email each invite code's link to the address it is pinned to.
+
+        Args:
+            token_ids: The IDs of the invite codes to send.
+            room_name: The room's name, if it has one.
+            inviter: The Matrix ID of the user inviting them.
+            inviter_name: The inviter's display name in the room, if they have one.
+            token: An admin access token from `request_admin_token`.
+
+        Returns:
+            How many emails MAS scheduled.
+
+        Raises:
+            ValueError: If the response has no `scheduled` count.
+            HttpResponseException: On a non-2xx HTTP response.
+        """
+        body: dict[str, Any] = {
+            "invites": [{"registration_token_id": token_id} for token_id in token_ids],
+            "room_name": room_name,
+            "inviter": inviter,
+            "inviter_name": inviter_name,
+        }
+        response = await self._api.http_client.post_json_get_json(
+            uri=self._build_admin_url(
+                "/api/admin/v1/user-registration-tokens/invite-emails"
+            ),
+            post_json={key: value for key, value in body.items() if value is not None},
+            headers={"Authorization": [f"Bearer {token}"]},
+        )
+
+        scheduled = response.get("scheduled")
+        if not isinstance(scheduled, int):
+            raise ValueError("MAS invite emails response missing `scheduled` field")
+
+        return scheduled
 
     async def deactivate_user(self, mas_user_id: str, token: str | None = None) -> None:
         if token is None:
