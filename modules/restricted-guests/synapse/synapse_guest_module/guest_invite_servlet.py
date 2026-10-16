@@ -5,6 +5,7 @@
 
 import json
 import logging
+from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Optional, Tuple
 
 from synapse.api.constants import EventContentFields, EventTypes, JoinRules, Membership
@@ -131,12 +132,14 @@ class GuestInviteServlet(DirectServeJsonResource):
 
         # MAS fills in `{random}` when the guest registers
         username = f"{self._config.user_id_prefix}{{random}}"
-        invites = [
-            {"email": email, "username": username} for email in unique_emails.values()
-        ]
+        expires_at = datetime.fromtimestamp(
+            self._api._hs.get_clock().time()
+            + self._config.email_invites.invite_lifetime,
+            tz=timezone.utc,
+        )
 
         logger.info(
-            "'%s' is inviting %d guest(s) to '%s'", user_id, len(invites), room_id
+            "'%s' is inviting %d guest(s) to '%s'", user_id, len(unique_emails), room_id
         )
         room_name = _non_empty_string(
             state.get((EventTypes.Name, "")), EventContentFields.ROOM_NAME
@@ -150,8 +153,28 @@ class GuestInviteServlet(DirectServeJsonResource):
             # this module and MAS, not the inviter's to see
             token = await self._mas_admin_client.request_admin_token()
             try:
-                scheduled = await self._mas_admin_client.invite_guests(
-                    room_id, room_name, user_id, inviter_name, invites, token
+                # Every address is minted for before any is sent, so a refused
+                # address sends no email at all
+                registration_tokens = [
+                    await self._mas_admin_client.create_registration_token(
+                        username,
+                        room_id,
+                        token,
+                        email=email,
+                        usage_limit=1,
+                        expires_at=expires_at,
+                    )
+                    for email in unique_emails.values()
+                ]
+                scheduled = await self._mas_admin_client.send_invite_emails(
+                    [
+                        registration_token.id
+                        for registration_token in registration_tokens
+                    ],
+                    room_name,
+                    user_id,
+                    inviter_name,
+                    token,
                 )
             except HttpResponseException as e:
                 if e.code == 400:
@@ -161,10 +184,9 @@ class GuestInviteServlet(DirectServeJsonResource):
                     }
                 if e.code == 404:
                     logger.warning(
-                        "MAS answered guest invites with 404: it's too old, has them "
-                        "turned off, or isn't at 'mas.admin_api_base_url'"
+                        "MAS answered guest invites with 404: it's too old or isn't "
+                        "at 'mas.admin_api_base_url'"
                     )
-                    return 404, {"msg": "Inviting guests by email is turned off"}
                 raise
         # A timeout is a `SynapseError`, and a connection failure a Twisted error
         except Exception:
@@ -278,15 +300,15 @@ class GuestInviteLinkServlet(GuestInviteServlet):
         logger.info("'%s' is creating a guest invite link to '%s'", user_id, room_id)
         try:
             token = await self._mas_admin_client.request_admin_token()
-            invite_url = await self._mas_admin_client.create_registration_token(
-                room_id, f"{self._config.user_id_prefix}{{random}}", token
+            registration_token = await self._mas_admin_client.create_registration_token(
+                f"{self._config.user_id_prefix}{{random}}", room_id, token
             )
         # A timeout is a `SynapseError`, and a connection failure a Twisted error
         except Exception:
             logger.exception("Failed to create a guest invite link in MAS")
             return 502, {"msg": "Failed to create the invite link"}
 
-        return 200, {"invite_url": invite_url}
+        return 200, {"invite_url": registration_token.invite_url}
 
 
 def _non_empty_string(event: Optional[EventBase], key: str) -> Optional[str]:

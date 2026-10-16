@@ -240,9 +240,11 @@ class GuestModule:
 
         max_emails = email_invites_config.get("max_emails", 20)
         per_inviter_per_hour = email_invites_config.get("per_inviter_per_hour", 50)
+        invite_lifetime = email_invites_config.get("invite_lifetime", 7 * 24 * 60 * 60)
         for name, value in (
             ("max_emails", max_emails),
             ("per_inviter_per_hour", per_inviter_per_hour),
+            ("invite_lifetime", invite_lifetime),
         ):
             if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
                 raise ConfigError(
@@ -265,7 +267,10 @@ class GuestModule:
             hide_room_directory_from_guests,
             frozenset(rooms_forbidden_to_guests),
             email_invites=EmailInvitesConfig(
-                email_invites_enabled, max_emails, per_inviter_per_hour
+                email_invites_enabled,
+                max_emails,
+                per_inviter_per_hour,
+                invite_lifetime,
             ),
         )
 

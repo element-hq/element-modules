@@ -29,6 +29,8 @@ class EmailInvitesConfig:
     # the server's name
     max_emails: int = 20
     per_inviter_per_hour: int = 50
+    # In seconds
+    invite_lifetime: int = 7 * 24 * 60 * 60
 
 
 @attr.s(frozen=True, auto_attribs=True)

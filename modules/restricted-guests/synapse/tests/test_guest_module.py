@@ -183,14 +183,27 @@ class GuestModuleConfigTest(aiounittest.AsyncTestCase):
                     "enabled": True,
                     "max_emails": 5,
                     "per_inviter_per_hour": 10,
+                    "invite_lifetime": 3600,
                 },
             }
         )
 
         self.assertEqual(
             config.email_invites,
-            EmailInvitesConfig(enabled=True, max_emails=5, per_inviter_per_hour=10),
+            EmailInvitesConfig(
+                enabled=True,
+                max_emails=5,
+                per_inviter_per_hour=10,
+                invite_lifetime=3600,
+            ),
         )
+
+    async def test_parse_config_email_invites_defaults(self) -> None:
+        config = GuestModule.parse_config(
+            {**mas_config_override(), "email_invites": {"enabled": True}}
+        )
+
+        self.assertEqual(config.email_invites.invite_lifetime, 604800)
 
     async def test_parse_config_fail_email_invites_without_mas(self) -> None:
         with self.assertRaisesRegex(
@@ -244,6 +257,17 @@ class GuestModuleConfigTest(aiounittest.AsyncTestCase):
             GuestModule.parse_config(
                 {
                     "email_invites": {"per_inviter_per_hour": "50"},
+                }
+            )
+
+    async def test_parse_config_fail_email_invites_invite_lifetime(self) -> None:
+        with self.assertRaisesRegex(
+            ConfigError,
+            "Config option 'email_invites.invite_lifetime' must be a positive integer",
+        ):
+            GuestModule.parse_config(
+                {
+                    "email_invites": {"invite_lifetime": 0},
                 }
             )
 
