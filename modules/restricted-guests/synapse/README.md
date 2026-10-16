@@ -191,6 +191,27 @@ The user reaper doesn't deactivate guests who signed up from an invite email, it
 only knows about the guests `register_guest` creates. They can be manually deactivated
 by listing them with MAS' admin API, `GET /api/admin/v1/users?filter[search]=guest-`, and deactivating from there.
 
+## Sharing an invite link
+
+`POST /_synapse/client/invite_guests/link` makes a link inviting guests to ask to join a
+room, for the caller to share. It's served alongside `/_synapse/client/invite_guests`
+and refuses callers and rooms the same way, including `block_non_admin_invites`. Each
+request counts once against `per_inviter_per_hour`, separately from email invites.
+
+```json
+{ "room_id": "!room:example.org" }
+```
+
+MAS mints an invite code with no address and no usage limit, and the response has its link:
+
+```json
+{ "invite_url": "https://auth.example.org/register?token=…" }
+```
+
+Anyone who follows the link signs up as a guest, with a localpart starting with
+`user_id_prefix`. The endpoint answers 400 for a missing or malformed `room_id`, the 403 and 429
+of `/_synapse/client/invite_guests`, and 502 if MAS fails or can't be reached.
+
 ## Production installation
 
 The module is not published to a python registry, but we provide a docker container that can be used as an `initContainer` in Kubernetes:

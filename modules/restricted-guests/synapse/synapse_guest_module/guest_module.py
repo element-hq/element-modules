@@ -25,7 +25,10 @@ from synapse.module_api.errors import ConfigError
 from synapse.types import UserID
 
 from synapse_guest_module.config import EmailInvitesConfig, GuestModuleConfig, MasConfig
-from synapse_guest_module.guest_invite_servlet import GuestInviteServlet
+from synapse_guest_module.guest_invite_servlet import (
+    GuestInviteLinkServlet,
+    GuestInviteServlet,
+)
 from synapse_guest_module.guest_registration_servlet import GuestRegistrationServlet
 from synapse_guest_module.guest_user_reaper import GuestUserReaper
 from synapse_guest_module.mas_admin_client import MasAdminClient
@@ -61,12 +64,19 @@ class GuestModule:
         )
 
         self.invite_servlet: Optional[GuestInviteServlet] = None
+        self.invite_link_servlet: Optional[GuestInviteLinkServlet] = None
         if config.email_invites.enabled and mas_admin_client is not None:
             self.invite_servlet = GuestInviteServlet(
                 config, api, mas_admin_client, self._is_module_guest
             )
             self._api.register_web_resource(
                 "/_synapse/client/invite_guests", self.invite_servlet
+            )
+            self.invite_link_servlet = GuestInviteLinkServlet(
+                config, api, mas_admin_client, self._is_module_guest
+            )
+            self._api.register_web_resource(
+                "/_synapse/client/invite_guests/link", self.invite_link_servlet
             )
         self._api.register_third_party_rules_callbacks(
             on_profile_update=self.profile_update

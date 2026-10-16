@@ -134,6 +134,43 @@ class MasAdminClient:
 
         return scheduled
 
+    async def create_registration_token(
+        self, room_id: str, username: str, token: str
+    ) -> str:
+        """Has MAS mint an unlimited, passwordless invite code for the room.
+
+        Args:
+            room_id: The room the invite code is for.
+            username: The username template the guests register with.
+            token: An admin access token from `request_admin_token`.
+
+        Returns:
+            The link to register with the invite code.
+
+        Raises:
+            ValueError: If the response has no `invite_url`.
+            HttpResponseException: On a non-2xx HTTP response.
+        """
+        url = self._build_admin_url("/api/admin/v1/user-registration-tokens")
+
+        response = await self._api.http_client.post_json_get_json(
+            uri=url,
+            post_json={
+                "username": username,
+                "passwordless": True,
+                "room_id": room_id,
+            },
+            headers={"Authorization": [f"Bearer {token}"]},
+        )
+
+        data = response.get("data", {})
+        attributes = data.get("attributes", {}) if isinstance(data, dict) else {}
+        invite_url = attributes.get("invite_url")
+        if not isinstance(invite_url, str) or len(invite_url) == 0:
+            raise ValueError("MAS registration token response missing `invite_url`")
+
+        return invite_url
+
     async def deactivate_user(self, mas_user_id: str, token: str | None = None) -> None:
         if token is None:
             token = await self.request_admin_token()
