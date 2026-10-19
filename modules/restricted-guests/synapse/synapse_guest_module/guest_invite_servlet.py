@@ -161,8 +161,8 @@ class GuestInviteServlet(DirectServeJsonResource):
         # Last, so that a refused request doesn't spend the limit
         await self._ratelimiter.ratelimit(requester, n_actions=len(unique_emails))
 
-        # MAS fills in `{random}` when the guest registers
-        username = f"{self._config.user_id_prefix}{{random}}"
+        # A minijinja template, which MAS renders when the guest registers
+        username = self._config.user_id_prefix + "{{ random }}"
         expires_at = datetime.fromtimestamp(
             self._api._hs.get_clock().time()
             + self._config.email_invites.invite_lifetime,
