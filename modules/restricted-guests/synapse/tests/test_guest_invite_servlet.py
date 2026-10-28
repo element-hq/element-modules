@@ -27,9 +27,18 @@ SEND_URI = "https://mas.example.org/api/admin/v1/user-registration-tokens/invite
 
 
 def mas_response(uri: str, post_json: Dict[str, Any], **kwargs: Any) -> Any:
-    """MAS's answer to a mint, naming the token after its address, or to a send"""
+    """MAS's answer to a mint, naming the token after its address, if any, or to a
+    send"""
     if uri == MINT_URI:
-        return {"data": {"id": f"token-{post_json['email']}"}}
+        name = post_json.get("email", "link")
+        return {
+            "data": {
+                "id": f"token-{name}",
+                "attributes": {
+                    "invite_url": f"https://mas.example.org/register?token={name}"
+                },
+            }
+        }
     return {"scheduled": len(post_json["invites"])}
 
 
@@ -143,8 +152,9 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
         body: bytes = (
             b'{"room_id":"!room:matrix.local","emails":["alice@example.com"]}'
         ),
+        link: bool = False,
     ) -> Tuple[int, Any]:
-        servlet = module.invite_servlet
+        servlet = module.invite_link_servlet if link else module.invite_servlet
         assert servlet is not None
         request = cast(SynapseRequest, DummyRequest([]))
         request.content = io.BytesIO(body)
@@ -155,6 +165,9 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
 
         module_api.register_web_resource.assert_any_call(
             "/_synapse/client/invite_guests", module.invite_servlet
+        )
+        module_api.register_web_resource.assert_any_call(
+            "/_synapse/client/invite_guests/link", module.invite_link_servlet
         )
 
     async def test_no_servlet_when_disabled(self) -> None:
@@ -301,6 +314,55 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
                 }
             ],
         )
+
+    async def test_invite_link(self) -> None:
+        module, module_api, _ = self.create_module({"user_id_prefix": "visitor-"})
+        status, response = await self.render(
+            module, b'{"room_id":"!room:matrix.local"}', link=True
+        )
+
+        self.assertEqual(
+            (status, response),
+            (200, {"invite_url": "https://mas.example.org/register?token=link"}),
+        )
+        call = module_api.http_client.post_json_get_json.call_args
+        self.assertEqual(
+            call.kwargs["uri"],
+            "https://mas.example.org/api/admin/v1/user-registration-tokens",
+        )
+        self.assertEqual(
+            call.kwargs["post_json"],
+            {
+                "username": "visitor-{{ random }}",
+                "passwordless": True,
+                "room_id": ROOM_ID,
+            },
+        )
+
+    async def test_invite_link_room_not_knockable(self) -> None:
+        module, module_api, _ = self.create_module()
+        module_api.get_room_state.return_value = room_state(join_rule="public")
+
+        status, response = await self.render(
+            module, b'{"room_id":"!room:matrix.local"}', link=True
+        )
+
+        self.assertEqual(status, 403)
+        self.assertEqual(response["reason"], "room_not_knockable")
+        module_api.http_client.post_json_get_json.assert_not_called()
+
+    async def test_invite_link_mas_error(self) -> None:
+        module, module_api, _ = self.create_module()
+        module_api.http_client.post_json_get_json.side_effect = HttpResponseException(
+            400, "Bad Request", b'{"errors":[{"title":"Invalid username"}]}'
+        )
+
+        with self.assertLogs("synapse.contrib", "ERROR"):
+            status, response = await self.render(
+                module, b'{"room_id":"!room:matrix.local"}', link=True
+            )
+
+        self.assertEqual(status, 502)
 
     async def test_invite_lifetime(self) -> None:
         module, module_api, _ = self.create_module(

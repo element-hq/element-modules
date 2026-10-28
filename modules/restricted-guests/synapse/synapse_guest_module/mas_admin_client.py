@@ -10,11 +10,18 @@ import string
 from datetime import datetime
 from typing import Any, Optional
 
+import attr
 from synapse.module_api import ModuleApi
 
 from synapse_guest_module.config import MasConfig
 
 logger = logging.getLogger("synapse.contrib." + __name__)
+
+
+@attr.s(frozen=True, auto_attribs=True)
+class RegistrationToken:
+    id: str
+    invite_url: str
 
 
 class MasAdminClient:
@@ -90,47 +97,53 @@ class MasAdminClient:
 
     async def create_registration_token(
         self,
-        email: str,
         username: str,
         room_id: str,
-        expires_at: datetime,
         token: str,
-    ) -> str:
-        """Has MAS mint a single-use, passwordless invite code pinned to the address.
+        email: Optional[str] = None,
+        usage_limit: Optional[int] = None,
+        expires_at: Optional[datetime] = None,
+    ) -> RegistrationToken:
+        """Has MAS mint a passwordless invite code for the room.
 
         Args:
-            email: The address the invite code is pinned to.
-            username: The username, or username template, the recipient registers with.
-            room_id: The room the recipient is sent to once registered.
-            expires_at: When the invite code expires, timezone-aware.
+            username: The username, or username template, its users register with.
+            room_id: The room its users are sent to once registered.
             token: An admin access token from `request_admin_token`.
-
-        Returns:
-            The ID of the minted invite code.
+            email: The address the invite code is pinned to, if any.
+            usage_limit: How many times it can be used, if limited.
+            expires_at: When it expires, timezone-aware, if it does.
 
         Raises:
-            ValueError: If the response has no `data.id`.
+            ValueError: If the response has no `data.id` or `invite_url`.
             HttpResponseException: On a non-2xx HTTP response.
         """
+        body: dict[str, Any] = {
+            "username": username,
+            "passwordless": True,
+            "room_id": room_id,
+            "email": email,
+            "usage_limit": usage_limit,
+            "expires_at": expires_at.isoformat() if expires_at is not None else None,
+        }
         response = await self._api.http_client.post_json_get_json(
             uri=self._build_admin_url("/api/admin/v1/user-registration-tokens"),
-            post_json={
-                "email": email,
-                "username": username,
-                "passwordless": True,
-                "usage_limit": 1,
-                "expires_at": expires_at.isoformat(),
-                "room_id": room_id,
-            },
+            post_json={key: value for key, value in body.items() if value is not None},
             headers={"Authorization": [f"Bearer {token}"]},
         )
 
         data = response.get("data")
         token_id = data.get("id") if isinstance(data, dict) else None
-        if not isinstance(token_id, str):
-            raise ValueError("MAS registration token response missing `data.id` field")
+        attributes = data.get("attributes") if isinstance(data, dict) else None
+        invite_url = (
+            attributes.get("invite_url") if isinstance(attributes, dict) else None
+        )
+        if not isinstance(token_id, str) or not isinstance(invite_url, str):
+            raise ValueError(
+                "MAS registration token response missing `data.id` or `invite_url`"
+            )
 
-        return token_id
+        return RegistrationToken(token_id, invite_url)
 
     async def send_invite_emails(
         self,
