@@ -155,10 +155,6 @@ as for inviting a user directly, and can't be a guest themselves. The room's joi
 Addresses are deduplicated ignoring case, and each counts once against `max_emails`
 and `per_inviter_per_hour`.
 
-Synapse's email-invite controls (`block_non_admin_invites`,
-`user_may_send_3pid_invite`, `check_threepid_can_be_invited`,
-`rc_third_party_invite`) don't apply to this endpoint.
-
 Each address gets a single-use invite code of its own, pinned to that address and
 expiring after `invite_lifetime`, which MAS emails a link for, naming the room and the
 caller. Every code is minted before any email is sent, so an address MAS refuses sends
@@ -173,12 +169,25 @@ account, and lands on the room. Nothing exists on this homeserver until they sig
 and this endpoint doesn't send a room invite. MAS assigns the guest's localpart, starting
 with `user_id_prefix`, when they sign up, once per address however many invites it gets.
 
-| Status | When                                                                                                                                                                                                                                            |
-| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 400    | `room_id` or `emails` is missing or malformed, there are more than `max_emails` addresses, or MAS refuses the request, with its message in `msg`                                                                                                |
-| 403    | The caller is a guest, isn't joined to the room or is below its `invite` level, or the room is forbidden to guests or its join rule isn't `knock` or `knock_restricted`. For the join rule, the body also has `"reason": "room_not_knockable"`. |
-| 429    | The caller is over `per_inviter_per_hour`. The body is Synapse's usual rate-limit error, with `retry_after_ms`.                                                                                                                                 |
-| 502    | MAS failed, couldn't be reached, or doesn't serve the endpoints above                                                                                                                                                                           |
+| Status | When                                                                                                                                                                                                                                                                                                            |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 400    | `room_id` or `emails` is missing or malformed, there are more than `max_emails` addresses, or MAS refuses the request, with its message in `msg`                                                                                                                                                                |
+| 403    | The caller is a guest, isn't joined to the room or is below its `invite` level, or the room is forbidden to guests or its join rule isn't `knock` or `knock_restricted`. For the join rule, the body also has `"reason": "room_not_knockable"`. Synapse's own invite controls can refuse a request too (below). |
+| 429    | The caller is over `per_inviter_per_hour`. The body is Synapse's usual rate-limit error, with `retry_after_ms`. Users Synapse exempts from rate limits, through the admin API's rate-limit override or an application service with `rate_limited: false`, aren't limited.                                       |
+| 502    | MAS failed, couldn't be reached, or doesn't serve the endpoints above                                                                                                                                                                                                                                           |
+
+Three of Synapse's own controls on email invites apply here too, and refuse with a 403:
+
+- `block_non_admin_invites` refuses callers who aren't server admins, as Synapse
+  decides it. Under MAS, that means the access token has the `urn:synapse:admin:*`
+  scope, so an admin signed in to Element Web with an ordinary token is refused too,
+  as with Synapse's own invites.
+- A third-party rules module's `check_threepid_can_be_invited` and a spam checker's
+  `user_may_send_3pid_invite` run for each address. If either refuses one, the whole
+  request is refused.
+
+Synapse's `rc_third_party_invite` rate limit doesn't apply: `per_inviter_per_hour` is
+the limit instead.
 
 The user reaper doesn't deactivate guests who signed up from an invite email, it
 only knows about the guests `register_guest` creates. They can be manually deactivated
