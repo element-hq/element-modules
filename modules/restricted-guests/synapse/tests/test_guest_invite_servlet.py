@@ -291,7 +291,7 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
             [
                 {
                     "email": email,
-                    "username": "visitor-{random}",
+                    "username": "visitor-{{ random }}",
                     "passwordless": True,
                     "usage_limit": 1,
                     "expires_at": "1970-01-08T00:00:00+00:00",
