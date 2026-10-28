@@ -332,7 +332,11 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
         )
         self.assertEqual(
             call.kwargs["post_json"],
-            {"username": "visitor-{random}", "passwordless": True, "room_id": ROOM_ID},
+            {
+                "username": "visitor-{{ random }}",
+                "passwordless": True,
+                "room_id": ROOM_ID,
+            },
         )
 
     async def test_invite_link_room_not_knockable(self) -> None:

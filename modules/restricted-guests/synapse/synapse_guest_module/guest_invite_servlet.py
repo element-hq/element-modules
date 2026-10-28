@@ -301,7 +301,7 @@ class GuestInviteLinkServlet(GuestInviteServlet):
         try:
             token = await self._mas_admin_client.request_admin_token()
             registration_token = await self._mas_admin_client.create_registration_token(
-                f"{self._config.user_id_prefix}{{random}}", room_id, token
+                self._config.user_id_prefix + "{{ random }}", room_id, token
             )
         # A timeout is a `SynapseError`, and a connection failure a Twisted error
         except Exception:
