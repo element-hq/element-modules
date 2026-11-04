@@ -6,7 +6,7 @@
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from urllib.parse import quote
 
 from synapse.api.constants import EventContentFields, EventTypes, JoinRules, Membership
@@ -86,50 +86,21 @@ class GuestInviteServlet(DirectServeJsonResource):
         if not isinstance(room_id, str) or not room_id.startswith("!"):
             return 400, {"msg": "You must provide a valid 'room_id'"}
 
-        emails = json_dict.get("emails")
-        if (
-            not isinstance(emails, list)
-            or len(emails) == 0
-            or not all(
-                isinstance(email, str) and len(email.strip()) > 0 for email in emails
-            )
-        ):
-            return 400, {
-                "msg": "You must provide 'emails' as a non-empty list of strings"
-            }
-
-        # Keyed ignoring case, keeping the first spelling of each address
-        unique_emails: Dict[str, str] = {}
-        for email in emails:
-            unique_emails.setdefault(email.strip().lower(), email.strip())
-
-        max_emails = self._config.email_invites.max_emails
-        if len(unique_emails) > max_emails:
-            return 400, {"msg": f"You can invite at most {max_emails} emails at once"}
+        emails, refusal = self._parse_emails(json_dict.get("emails"))
+        if refusal is not None:
+            return refusal
 
         user_id = requester.user.to_string()
         state, refusal = await self._check_room(requester, room_id)
         if refusal is not None:
             return refusal
 
-        # The checks on each address are Synapse's own, as it makes them for
-        # email invites
-        for email in unique_emails.values():
-            if not await self._third_party_rules.check_threepid_can_be_invited(
-                medium="email", address=email, room_id=room_id
-            ) or (
-                await self._spam_checker.user_may_send_3pid_invite(
-                    inviter_userid=user_id,
-                    medium="email",
-                    address=email,
-                    room_id=room_id,
-                )
-                != NOT_SPAM
-            ):
-                return 403, {"msg": f"You can't invite {email} to this room"}
+        refusal = await self._check_addresses(user_id, room_id, emails)
+        if refusal is not None:
+            return refusal
 
         # Last, so that a refused request doesn't spend the limit
-        await self._ratelimiter.ratelimit(requester, n_actions=len(unique_emails))
+        await self._ratelimiter.ratelimit(requester, n_actions=len(emails))
 
         # A minijinja template, which MAS renders when the guest registers
         username = self._config.user_id_prefix + "{{ random }}"
@@ -140,7 +111,7 @@ class GuestInviteServlet(DirectServeJsonResource):
         )
 
         logger.info(
-            "'%s' is inviting %d guest(s) to '%s'", user_id, len(unique_emails), room_id
+            "'%s' is inviting %d guest(s) to '%s'", user_id, len(emails), room_id
         )
         room_name = _non_empty_string(
             state.get((EventTypes.Name, "")), EventContentFields.ROOM_NAME
@@ -165,7 +136,7 @@ class GuestInviteServlet(DirectServeJsonResource):
                         usage_limit=1,
                         expires_at=expires_at,
                     )
-                    for email in unique_emails.values()
+                    for email in emails
                 ]
                 scheduled = await self._mas_admin_client.send_invite_emails(
                     [
@@ -179,10 +150,7 @@ class GuestInviteServlet(DirectServeJsonResource):
                 )
             except HttpResponseException as e:
                 if e.code == 400:
-                    return 400, {
-                        "msg": _first_error_title(e.response)
-                        or "MAS refused the invites"
-                    }
+                    return _mas_refusal(e, "MAS refused the invites")
                 if e.code == 404:
                     logger.warning(
                         "MAS answered guest invites with 404: it's too old or isn't "
@@ -196,19 +164,61 @@ class GuestInviteServlet(DirectServeJsonResource):
 
         return 202, {"scheduled": scheduled}
 
-    def _room_url(self, room_id: str) -> str:
-        """The URL MAS sends an invitee to for this room, once they're signed in.
-
-        MAS redirects to it without reading it, so `client_room_url` can lead to
-        any client, or to a page that lets the invitee pick one. Only the room ID
-        is filled in: `via` servers, which a client on another homeserver needs
-        to find the room, have to be part of `client_room_url`.
+    def _parse_emails(
+        self, emails: Any
+    ) -> Tuple[List[str], Optional[Tuple[int, Dict[str, Any]]]]:
+        """The addresses, stripped and deduplicated ignoring case, keeping the first
+        spelling of each, and the response refusing them if they're malformed or too
+        many.
         """
-        # Checked when the config was parsed
-        assert self._config.email_invites.client_room_url is not None
-        return self._config.email_invites.client_room_url.replace(
-            "{room_id}", quote(room_id, safe="")
-        )
+        if (
+            not isinstance(emails, list)
+            or len(emails) == 0
+            or not all(
+                isinstance(email, str) and len(email.strip()) > 0 for email in emails
+            )
+        ):
+            return [], (
+                400,
+                {"msg": "You must provide 'emails' as a non-empty list of strings"},
+            )
+
+        # Keyed ignoring case, keeping the first spelling of each address
+        unique_emails: Dict[str, str] = {}
+        for email in emails:
+            unique_emails.setdefault(email.strip().lower(), email.strip())
+
+        max_emails = self._config.email_invites.max_emails
+        if len(unique_emails) > max_emails:
+            return [], (
+                400,
+                {"msg": f"You can invite at most {max_emails} emails at once"},
+            )
+
+        return list(unique_emails.values()), None
+
+    async def _check_addresses(
+        self, user_id: str, room_id: str, emails: List[str]
+    ) -> Optional[Tuple[int, Dict[str, Any]]]:
+        """The response refusing the request if the user may not invite one of these
+        addresses to the room.
+
+        The checks are Synapse's own, as it makes them for email invites.
+        """
+        for email in emails:
+            if not await self._third_party_rules.check_threepid_can_be_invited(
+                medium="email", address=email, room_id=room_id
+            ) or (
+                await self._spam_checker.user_may_send_3pid_invite(
+                    inviter_userid=user_id,
+                    medium="email",
+                    address=email,
+                    room_id=room_id,
+                )
+                != NOT_SPAM
+            ):
+                return 403, {"msg": f"You can't invite {email} to this room"}
+        return None
 
     async def _check_room(
         self, requester: Requester, room_id: str
@@ -261,6 +271,20 @@ class GuestInviteServlet(DirectServeJsonResource):
             return state, (403, {"msg": "Guests are forbidden from this room"})
 
         return state, None
+
+    def _room_url(self, room_id: str) -> str:
+        """The URL MAS sends an invitee to for this room, once they're signed in.
+
+        MAS redirects to it without reading it, so `client_room_url` can lead to
+        any client, or to a page that lets the invitee pick one. Only the room ID
+        is filled in: `via` servers, which a client on another homeserver needs
+        to find the room, have to be part of `client_room_url`.
+        """
+        # Checked when the config was parsed
+        assert self._config.email_invites.client_room_url is not None
+        return self._config.email_invites.client_room_url.replace(
+            "{room_id}", quote(room_id, safe="")
+        )
 
     @staticmethod
     def _may_invite(user_id: str, state: StateMap[EventBase]) -> bool:
@@ -337,10 +361,14 @@ def _non_empty_string(event: Optional[EventBase], key: str) -> Optional[str]:
     return value if isinstance(value, str) and value else None
 
 
-def _first_error_title(body: bytes) -> Optional[str]:
-    """The first title in a MAS admin API error body, `{"errors": [{"title"}]}`."""
+def _mas_refusal(
+    e: HttpResponseException, default_msg: str
+) -> Tuple[int, Dict[str, Any]]:
+    """A 400 passing on MAS's refusal of a request, with the first title in its error
+    body, `{"errors": [{"title"}]}`, or this message.
+    """
     try:
-        title = json.loads(body)["errors"][0]["title"]
+        title = json.loads(e.response)["errors"][0]["title"]
     except (ValueError, LookupError, TypeError):
-        return None
-    return title if isinstance(title, str) else None
+        title = None
+    return 400, {"msg": title if isinstance(title, str) and title else default_msg}
