@@ -5,12 +5,13 @@
 
 import json
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
 from urllib.parse import quote
 
 from synapse.api.constants import EventContentFields, EventTypes, JoinRules, Membership
-from synapse.api.errors import HttpResponseException
+from synapse.api.errors import HttpResponseException, UnrecognizedRequestError
 from synapse.api.ratelimiting import Ratelimiter
 from synapse.config.ratelimiting import RatelimitSettings
 from synapse.event_auth import get_named_level, get_user_power_level
@@ -29,6 +30,9 @@ from synapse_guest_module.config import GuestModuleConfig
 from synapse_guest_module.mas_admin_client import MasAdminClient
 
 logger = logging.getLogger("synapse.contrib." + __name__)
+
+# A ULID, as MAS names invite codes, in Crockford's base32
+_ULID = re.compile(rb"[0-9A-HJKMNP-TV-Z]{26}", re.IGNORECASE)
 
 
 class GuestInviteServlet(DirectServeJsonResource):
@@ -279,6 +283,10 @@ class GuestInviteServlet(DirectServeJsonResource):
         any client, or to a page that lets the invitee pick one. Only the room ID
         is filled in: `via` servers, which a client on another homeserver needs
         to find the room, have to be part of `client_room_url`.
+
+        Replacing a link's addresses compares the link's URL with this one, so it
+        has to depend on nothing but the room ID and `client_room_url`, and
+        differ between rooms.
         """
         # Checked when the config was parsed
         assert self._config.email_invites.client_room_url is not None
@@ -312,15 +320,23 @@ class GuestInviteLinkServlet(GuestInviteServlet):
     """The `POST /_synapse/client/invite_guests/link` endpoint makes a link
     inviting guests to a room, for the caller to share. It requires the
     `room_id` property, and takes the `emails` allowed to use the link.
+    `PUT /_synapse/client/invite_guests/link/{id}` replaces a link's `emails`, and
+    requires the link's `room_id` too.
 
     MAS mints an invite code with no usage limit, which only the `emails` can
     use if they're given, and anyone otherwise. Nothing exists on this homeserver
     until someone follows the link, and MAS assigns each guest's localpart then.
     """
 
+    # Also serves the paths below it, which name a link
+    isLeaf = True
+
     async def _async_render_POST(
         self, request: SynapseRequest
     ) -> Tuple[int, Dict[str, Any]]:
+        if request.postpath:
+            raise UnrecognizedRequestError(code=404)
+
         requester = await self._api.get_user_by_req(request)
 
         json_dict = parse_json_object_from_request(request)
@@ -384,6 +400,76 @@ class GuestInviteLinkServlet(GuestInviteServlet):
             logger.exception("Failed to request an admin token from MAS")
             return None
 
+    async def _async_render_PUT(
+        self, request: SynapseRequest
+    ) -> Tuple[int, Dict[str, Any]]:
+        """Have MAS replace the addresses allowed to use a link.
+
+        Anyone who may invite guests to the link's room may replace them. Neither
+        this module nor MAS records a link's room, so the caller names it, and the
+        link has to lead where a link to that room would.
+        """
+        postpath = request.postpath or []
+        if len(postpath) != 1:
+            raise UnrecognizedRequestError(code=404)
+        if not _ULID.fullmatch(postpath[0]):
+            return 404, {"msg": "Unknown invite link"}
+        link_id = postpath[0].decode("ascii")
+
+        requester = await self._api.get_user_by_req(request)
+
+        json_dict = parse_json_object_from_request(request)
+
+        room_id = json_dict.get("room_id")
+        if not isinstance(room_id, str) or not room_id.startswith("!"):
+            return 400, {"msg": "You must provide a valid 'room_id'"}
+
+        emails, refusal = self._parse_emails(json_dict.get("emails"))
+        if refusal is not None:
+            return refusal
+
+        user_id = requester.user.to_string()
+        _, refusal = await self._check_room(requester, room_id)
+        if refusal is not None:
+            return refusal
+
+        refusal = await self._check_addresses(user_id, room_id, emails)
+        if refusal is not None:
+            return refusal
+
+        # Before MAS is asked anything, so that a wrong link spends the limit too
+        await self._ratelimiter.ratelimit(requester)
+
+        token = await self._admin_token()
+        if token is None:
+            return 502, {"msg": "Failed to update the invite link"}
+        try:
+            link = await self._mas_admin_client.get_registration_token(link_id, token)
+        except Exception as e:
+            return _mas_failure(
+                e, "Failed to update the invite link", unknown_link=True
+            )
+
+        # Only listed links to this room: an open link stays open
+        if link.continue_url != self._room_url(room_id) or link.allowed_emails is None:
+            return 404, {"msg": "Unknown invite link"}
+
+        logger.info(
+            "'%s' is replacing the addresses allowed to use guest invite link '%s'",
+            user_id,
+            link_id,
+        )
+        try:
+            link = await self._mas_admin_client.set_allowed_emails(
+                link_id, emails, token
+            )
+        except Exception as e:
+            return _mas_failure(
+                e, "Failed to update the invite link", unknown_link=True
+            )
+
+        return 200, {"id": link.id, "invite_url": link.invite_url}
+
 
 def _non_empty_string(event: Optional[EventBase], key: str) -> Optional[str]:
     """The event's content value for this key, if it's a non-empty string.
@@ -407,11 +493,16 @@ def _mas_refusal(
     return 400, {"msg": title if isinstance(title, str) and title else default_msg}
 
 
-def _mas_failure(e: Exception, failure_msg: str) -> Tuple[int, Dict[str, Any]]:
+def _mas_failure(
+    e: Exception, failure_msg: str, unknown_link: bool = False
+) -> Tuple[int, Dict[str, Any]]:
     """The response to a MAS request about a link that raised this: MAS's refusal
-    passed on as a 400, and anything else a 502 with this message.
+    passed on as a 400, a 404 if MAS doesn't know the link and `unknown_link` is
+    set, and anything else a 502 with this message.
     """
     if isinstance(e, HttpResponseException) and e.code == 400:
         return _mas_refusal(e, "MAS refused the invite link")
+    if isinstance(e, HttpResponseException) and e.code == 404 and unknown_link:
+        return 404, {"msg": "Unknown invite link"}
     logger.exception(failure_msg)
     return 502, {"msg": failure_msg}

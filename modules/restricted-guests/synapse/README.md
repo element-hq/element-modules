@@ -249,6 +249,36 @@ list. The endpoint answers 400 for a missing or malformed
 of `/_synapse/client/invite_guests`, and 502 if MAS fails otherwise, can't be reached, or is too
 old to hold a link to `emails`.
 
+`PUT /_synapse/client/invite_guests/link/{id}` replaces the addresses allowed to use a
+link, with the `id` from its response. The body names the link's room and holds the whole
+new list, both checked as when making a link:
+
+```json
+{
+    "room_id": "!room:example.org",
+    "emails": ["alice@example.com", "carol@example.com"]
+}
+```
+
+Anyone who may make a link to the link's room may replace its list, not only the caller who
+made it. Neither the module nor MAS records which room a link is for, so the caller names
+it, and the module checks that the link leads where a link to that room would, with
+the current `client_room_url`. A link made before `client_room_url` changed can no longer
+be edited. Each request counts once against `per_inviter_per_hour`, with the links the
+caller makes, once the caller, the room and the addresses have passed and before the
+module asks MAS about the link. The response is the same as when making a link.
+
+Taking an address off the list doesn't remove anyone from the room. A guest who signed up
+with it keeps their account and stays joined, and a request to join stays until a member
+denies it. The list only stops sign-ups through the link from then on, so
+removing someone is an ordinary kick.
+
+The endpoint answers 404 for an ID that isn't a ULID or that MAS doesn't know, or for an
+invite code that isn't a link to `room_id` or has no `emails`. It answers 400 for a missing or
+malformed `room_id` or `emails`,
+or with MAS's message in `msg` if MAS refuses the list, the 403 and 429 of
+`/_synapse/client/invite_guests`, and 502 if MAS fails otherwise or can't be reached.
+
 ## Production installation
 
 The module is not published to a python registry, but we provide a docker container that can be used as an `initContainer` in Kubernetes:
