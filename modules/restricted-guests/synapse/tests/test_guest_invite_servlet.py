@@ -35,7 +35,8 @@ def mas_response(uri: str, post_json: Dict[str, Any], **kwargs: Any) -> Any:
             "data": {
                 "id": f"token-{name}",
                 "attributes": {
-                    "invite_url": f"https://mas.example.org/register?token={name}"
+                    "invite_url": f"https://mas.example.org/register?token={name}",
+                    "allowed_emails": post_json.get("allowed_emails"),
                 },
             }
         }
@@ -329,7 +330,13 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
 
         self.assertEqual(
             (status, response),
-            (200, {"invite_url": "https://mas.example.org/register?token=link"}),
+            (
+                200,
+                {
+                    "id": "token-link",
+                    "invite_url": "https://mas.example.org/register?token=link",
+                },
+            ),
         )
         call = module_api.http_client.post_json_get_json.call_args
         self.assertEqual(
@@ -357,10 +364,148 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
         self.assertEqual(response["reason"], "room_not_knockable")
         module_api.http_client.post_json_get_json.assert_not_called()
 
+    async def test_invite_link_allowed_emails(self) -> None:
+        module, module_api, _ = self.create_module(
+            email_invites={"max_emails": 2, "per_inviter_per_hour": 2}
+        )
+
+        status, response = await self.render(
+            module,
+            b'{"room_id":"!room:matrix.local",'
+            b'"emails":["Alice@example.com"," alice@example.com","bob@example.com "]}',
+            link=True,
+        )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(response["id"], "token-link")
+        [mint] = mas_calls(module_api, MINT_URI)
+        self.assertEqual(
+            mint["allowed_emails"], ["Alice@example.com", "bob@example.com"]
+        )
+
+    async def test_invite_link_too_many_emails(self) -> None:
+        module, module_api, _ = self.create_module(email_invites={"max_emails": 2})
+
+        status, response = await self.render(
+            module,
+            b'{"room_id":"!room:matrix.local",'
+            b'"emails":["a@example.com","b@example.com","c@example.com"]}',
+            link=True,
+        )
+
+        self.assertEqual(
+            (status, response),
+            (400, {"msg": "You can invite at most 2 emails at once"}),
+        )
+        module_api.http_client.post_json_get_json.assert_not_called()
+
+    async def test_invite_link_null_emails(self) -> None:
+        module, module_api, _ = self.create_module()
+
+        status, response = await self.render(
+            module, b'{"room_id":"!room:matrix.local","emails":null}', link=True
+        )
+
+        self.assertEqual(status, 200)
+        [mint] = mas_calls(module_api, MINT_URI)
+        self.assertNotIn("allowed_emails", mint)
+
+    async def test_invite_link_malformed_emails(self) -> None:
+        module, module_api, _ = self.create_module()
+
+        for emails in [b"[]", b'[" "]', b'["a@example.com",1]', b'"a@example.com"']:
+            with self.subTest(emails):
+                status, response = await self.render(
+                    module,
+                    b'{"room_id":"!room:matrix.local","emails":' + emails + b"}",
+                    link=True,
+                )
+
+                self.assertEqual(status, 400)
+        module_api.http_client.post_json_get_json.assert_not_called()
+
+    async def test_invite_link_spam_checker_refuses_address(self) -> None:
+        module, module_api, _ = self.create_module()
+
+        async def user_may_send_3pid_invite(
+            inviter_userid: str, medium: str, address: str, room_id: str
+        ) -> Any:
+            if address == "bob@example.com":
+                return Codes.FORBIDDEN, {}
+            return NOT_SPAM
+
+        spam_checker = module_api._hs.get_module_api_callbacks.return_value.spam_checker
+        spam_checker.user_may_send_3pid_invite.side_effect = user_may_send_3pid_invite
+
+        status, response = await self.render(
+            module,
+            b'{"room_id":"!room:matrix.local",'
+            b'"emails":["alice@example.com","bob@example.com"]}',
+            link=True,
+        )
+
+        self.assertEqual(status, 403)
+        module_api.http_client.post_json_get_json.assert_not_called()
+
+    async def test_invite_link_third_party_rules_refuse_address(self) -> None:
+        module, module_api, _ = self.create_module()
+
+        async def check_threepid_can_be_invited(
+            medium: str, address: str, room_id: str
+        ) -> bool:
+            return address != "bob@example.com"
+
+        third_party_rules = (
+            module_api._hs.get_module_api_callbacks.return_value.third_party_event_rules
+        )
+        third_party_rules.check_threepid_can_be_invited.side_effect = (
+            check_threepid_can_be_invited
+        )
+
+        status, response = await self.render(
+            module,
+            b'{"room_id":"!room:matrix.local",'
+            b'"emails":["alice@example.com","bob@example.com"]}',
+            link=True,
+        )
+
+        self.assertEqual(status, 403)
+        module_api.http_client.post_json_get_json.assert_not_called()
+
+    async def test_invite_link_limit_counts_one(self) -> None:
+        module, module_api, _ = self.create_module(
+            email_invites={"max_emails": 2, "per_inviter_per_hour": 2}
+        )
+        two_emails = (
+            b'{"room_id":"!room:matrix.local",'
+            b'"emails":["a@example.com","b@example.com"]}'
+        )
+
+        for _ in range(2):
+            status, _ = await self.render(module, two_emails, link=True)
+            self.assertEqual(status, 200)
+
+        with self.assertRaises(LimitExceededError):
+            await self.render(module, two_emails, link=True)
+
+    async def test_invite_link_mas_refuses(self) -> None:
+        module, module_api, _ = self.create_module()
+        module_api.http_client.post_json_get_json.side_effect = HttpResponseException(
+            400, "Bad Request", b'{"errors":[{"title":"Email is banned"}]}'
+        )
+
+        status, response = await self.render(
+            module,
+            b'{"room_id":"!room:matrix.local","emails":["alice@example.com"]}',
+            link=True,
+        )
+
+        self.assertEqual((status, response), (400, {"msg": "Email is banned"}))
+
     async def test_invite_link_mas_error(self) -> None:
         module, module_api, _ = self.create_module()
         module_api.http_client.post_json_get_json.side_effect = HttpResponseException(
-            400, "Bad Request", b'{"errors":[{"title":"Invalid username"}]}'
+            409, "Conflict", b'{"errors":[{"title":"Username taken"}]}'
         )
 
         with self.assertLogs("synapse.contrib", "ERROR"):
@@ -369,6 +514,53 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
             )
 
         self.assertEqual(status, 502)
+
+    async def test_invite_link_mas_token_refused(self) -> None:
+        module, module_api, _ = self.create_module()
+        module_api.http_client.post_urlencoded_get_json.side_effect = (
+            HttpResponseException(400, "Bad Request", b'{"error":"invalid_client"}')
+        )
+
+        with self.assertLogs("synapse.contrib", "ERROR"):
+            status, response = await self.render(
+                module, b'{"room_id":"!room:matrix.local"}', link=True
+            )
+
+        self.assertEqual(status, 502)
+        module_api.http_client.post_json_get_json.assert_not_called()
+
+    async def test_invite_link_mas_timeout(self) -> None:
+        module, module_api, _ = self.create_module()
+        module_api.http_client.post_json_get_json.side_effect = RequestTimedOutError(
+            "Timeout"
+        )
+
+        with self.assertLogs("synapse.contrib", "ERROR"):
+            status, response = await self.render(
+                module, b'{"room_id":"!room:matrix.local"}', link=True
+            )
+
+        self.assertEqual(status, 502)
+
+    async def test_invite_link_mas_ignores_allowed_emails(self) -> None:
+        module, module_api, _ = self.create_module()
+
+        def ignore_allowed_emails(
+            uri: str, post_json: Dict[str, Any], **kwargs: Any
+        ) -> Any:
+            return mas_response(uri, {**post_json, "allowed_emails": None})
+
+        module_api.http_client.post_json_get_json.side_effect = ignore_allowed_emails
+
+        with self.assertLogs("synapse.contrib", "WARNING"):
+            status, response = await self.render(
+                module,
+                b'{"room_id":"!room:matrix.local","emails":["alice@example.com"]}',
+                link=True,
+            )
+
+        self.assertEqual(status, 502)
+        self.assertNotIn("invite_url", response)
 
     async def test_invite_lifetime(self) -> None:
         module, module_api, _ = self.create_module(
@@ -418,7 +610,10 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
             b'"emails":["a@example.com","b@example.com","c@example.com"]}',
         )
 
-        self.assertEqual(status, 400)
+        self.assertEqual(
+            (status, response),
+            (400, {"msg": "You can invite at most 2 emails at once"}),
+        )
         module_api.http_client.post_json_get_json.assert_not_called()
 
     async def test_limit_counts_emails(self) -> None:

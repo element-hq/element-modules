@@ -311,11 +311,11 @@ class GuestInviteServlet(DirectServeJsonResource):
 class GuestInviteLinkServlet(GuestInviteServlet):
     """The `POST /_synapse/client/invite_guests/link` endpoint makes a link
     inviting guests to a room, for the caller to share. It requires the
-    `room_id` property.
+    `room_id` property, and takes the `emails` allowed to use the link.
 
-    MAS mints an invite code with no address and no usage limit. Nothing exists
-    on this homeserver until someone follows the link, and MAS assigns each
-    guest's localpart then.
+    MAS mints an invite code with no usage limit, which only the `emails` can
+    use if they're given, and anyone otherwise. Nothing exists on this homeserver
+    until someone follows the link, and MAS assigns each guest's localpart then.
     """
 
     async def _async_render_POST(
@@ -329,27 +329,60 @@ class GuestInviteLinkServlet(GuestInviteServlet):
         if not isinstance(room_id, str) or not room_id.startswith("!"):
             return 400, {"msg": "You must provide a valid 'room_id'"}
 
+        emails: Optional[List[str]] = None
+        if json_dict.get("emails") is not None:
+            emails, refusal = self._parse_emails(json_dict["emails"])
+            if refusal is not None:
+                return refusal
+
+        user_id = requester.user.to_string()
         _, refusal = await self._check_room(requester, room_id)
         if refusal is not None:
             return refusal
 
+        if emails is not None:
+            refusal = await self._check_addresses(user_id, room_id, emails)
+            if refusal is not None:
+                return refusal
+
+        # One link, however many addresses may use it, because no email is sent
         await self._ratelimiter.ratelimit(requester)
 
-        user_id = requester.user.to_string()
         logger.info("'%s' is creating a guest invite link to '%s'", user_id, room_id)
+        token = await self._admin_token()
+        if token is None:
+            return 502, {"msg": "Failed to create the invite link"}
         try:
-            token = await self._mas_admin_client.request_admin_token()
             registration_token = await self._mas_admin_client.create_registration_token(
                 self._config.user_id_prefix + "{{ random }}",
                 self._room_url(room_id),
                 token,
+                allowed_emails=emails,
             )
-        # A timeout is a `SynapseError`, and a connection failure a Twisted error
-        except Exception:
-            logger.exception("Failed to create a guest invite link in MAS")
+        except Exception as e:
+            return _mas_failure(e, "Failed to create the invite link")
+
+        if emails is not None and registration_token.allowed_emails is None:
+            logger.warning(
+                "MAS minted guest invite link '%s' without its allowed addresses: it's "
+                "too old to limit who uses a link. Revoke it with MAS's admin API.",
+                registration_token.id,
+            )
             return 502, {"msg": "Failed to create the invite link"}
 
-        return 200, {"invite_url": registration_token.invite_url}
+        return 200, {
+            "id": registration_token.id,
+            "invite_url": registration_token.invite_url,
+        }
+
+    async def _admin_token(self) -> Optional[str]:
+        """An admin access token from MAS, or None if MAS refused or failed it."""
+        try:
+            return await self._mas_admin_client.request_admin_token()
+        # A timeout is a `SynapseError`, and a connection failure a Twisted error
+        except Exception:
+            logger.exception("Failed to request an admin token from MAS")
+            return None
 
 
 def _non_empty_string(event: Optional[EventBase], key: str) -> Optional[str]:
@@ -372,3 +405,13 @@ def _mas_refusal(
     except (ValueError, LookupError, TypeError):
         title = None
     return 400, {"msg": title if isinstance(title, str) and title else default_msg}
+
+
+def _mas_failure(e: Exception, failure_msg: str) -> Tuple[int, Dict[str, Any]]:
+    """The response to a MAS request about a link that raised this: MAS's refusal
+    passed on as a 400, and anything else a 502 with this message.
+    """
+    if isinstance(e, HttpResponseException) and e.code == 400:
+        return _mas_refusal(e, "MAS refused the invite link")
+    logger.exception(failure_msg)
+    return 502, {"msg": failure_msg}
