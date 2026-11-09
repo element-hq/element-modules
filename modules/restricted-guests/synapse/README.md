@@ -79,6 +79,7 @@ API](https://element-hq.github.io/matrix-authentication-service/topics/admin-api
     - `max_emails` - the most addresses one request can invite. It can't exceed `per_inviter_per_hour`. Default: `20`.
     - `per_inviter_per_hour` - how many addresses one user can invite per hour, on average. Up to this many can go at once, and the allowance then refills over the next hour, so one hour can see nearly twice this many. Each worker counts separately, and the count resets when Synapse restarts. Default: `50`.
     - `invite_lifetime` - how long an invite link stays valid, in seconds. Default: `604800` (7 days).
+    - `client_room_url` - where invitees are sent once they have signed up or signed in, with `{room_id}` standing for the percent-encoded room ID, such as `https://app.example.org/#/room/{room_id}`. It must be an `http` or `https` URL. Required with `enabled`. See [where invite links lead](#where-invite-links-lead).
 
 Example configuration:
 
@@ -111,6 +112,7 @@ modules:
               max_emails: 20
               per_inviter_per_hour: 50
               invite_lifetime: 604800
+              client_room_url: "https://app.example.org/#/room/{room_id}"
 ```
 
 Enable [the Admin API on a MAS
@@ -192,6 +194,24 @@ the limit instead.
 The user reaper doesn't deactivate guests who signed up from an invite email, it
 only knows about the guests `register_guest` creates. They can be manually deactivated
 by listing them with MAS' admin API, `GET /api/admin/v1/users?filter[search]=guest-`, and deactivating from there.
+
+### Where invite links lead
+
+The module fills the room ID into `client_room_url` and gives MAS the result with each
+invite code. MAS redirects to it once the recipient is signed in, without reading it.
+So the URL doesn't have to be a room in one web client: it can be any client's room
+URL, or a page that lets the recipient pick a client, such as a `matrix.to` link.
+
+Two things limit that today:
+
+- **Guests can only sign in from the browser they signed up in.** A guest has no
+  password, so signing in anywhere else, in another browser or in an app that doesn't
+  share that browser's session, ends at a sign-in page they can't use.
+- **Only the room ID is filled in, not `via` servers.** A client whose homeserver isn't
+  in the room needs them to find it, and a room ID no longer names a server from room
+  version 12 on. Guests are on this homeserver, so they don't need any. For a URL that
+  other homeservers' users may open, put this server's name in the configured URL
+  itself, such as `https://matrix.to/#/{room_id}?via=example.org`.
 
 ## Production installation
 

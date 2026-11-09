@@ -92,7 +92,7 @@ class MasAdminClient:
         self,
         email: str,
         username: str,
-        room_id: str,
+        continue_url: str,
         expires_at: datetime,
         token: str,
     ) -> str:
@@ -101,7 +101,7 @@ class MasAdminClient:
         Args:
             email: The address the invite code is pinned to.
             username: The username, or username template, the recipient registers with.
-            room_id: The room the recipient is sent to once registered.
+            continue_url: Where the recipient is sent once registered or signed in.
             expires_at: When the invite code expires, timezone-aware.
             token: An admin access token from `request_admin_token`.
 
@@ -120,7 +120,7 @@ class MasAdminClient:
                 "passwordless": True,
                 "usage_limit": 1,
                 "expires_at": expires_at.isoformat(),
-                "room_id": room_id,
+                "continue_url": continue_url,
             },
             headers={"Authorization": [f"Bearer {token}"]},
         )

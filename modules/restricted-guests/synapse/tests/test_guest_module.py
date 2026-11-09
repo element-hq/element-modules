@@ -184,6 +184,7 @@ class GuestModuleConfigTest(aiounittest.AsyncTestCase):
                     "max_emails": 5,
                     "per_inviter_per_hour": 10,
                     "invite_lifetime": 3600,
+                    "client_room_url": "https://app.example.org/#/room/{room_id}",
                 },
             }
         )
@@ -195,12 +196,19 @@ class GuestModuleConfigTest(aiounittest.AsyncTestCase):
                 max_emails=5,
                 per_inviter_per_hour=10,
                 invite_lifetime=3600,
+                client_room_url="https://app.example.org/#/room/{room_id}",
             ),
         )
 
     async def test_parse_config_email_invites_defaults(self) -> None:
         config = GuestModule.parse_config(
-            {**mas_config_override(), "email_invites": {"enabled": True}}
+            {
+                **mas_config_override(),
+                "email_invites": {
+                    "enabled": True,
+                    "client_room_url": "https://app.example.org/#/room/{room_id}",
+                },
+            }
         )
 
         self.assertEqual(config.email_invites.invite_lifetime, 604800)
@@ -214,6 +222,36 @@ class GuestModuleConfigTest(aiounittest.AsyncTestCase):
                     "email_invites": {"enabled": True},
                 }
             )
+
+    async def test_parse_config_fail_email_invites_client_room_url(self) -> None:
+        for client_room_url in (
+            None,
+            1,
+            "https://app.example.org/#/room/",
+            "app.example.org/#/room/{room_id}",
+            "matrix:roomid/{room_id}",
+            "https:app.example.org/#/room/{room_id}",
+            "https:///#/room/{room_id}",
+            "https://{room_id}.example.org/",
+            "https://app.example.org/#/room/{room_id} ",
+            "https://app.example.org/#/room/{room_id}\n",
+            "https://app.exämple.org/#/room/{room_id}",
+        ):
+            with self.subTest(client_room_url), self.assertRaisesRegex(
+                ConfigError,
+                "Config option 'email_invites.client_room_url' is required with "
+                "'enabled', and must be an http or https URL in visible ASCII with "
+                "'{room_id}' after its host: ",
+            ):
+                GuestModule.parse_config(
+                    {
+                        **mas_config_override(),
+                        "email_invites": {
+                            "enabled": True,
+                            "client_room_url": client_room_url,
+                        },
+                    }
+                )
 
     async def test_parse_config_fail_email_invites_enabled(self) -> None:
         with self.assertRaisesRegex(

@@ -10,7 +10,9 @@
 
 import asyncio
 import logging
+import re
 from typing import Any, Dict, Literal, Optional, Tuple, Union
+from urllib.parse import urlsplit
 
 from synapse.module_api import (
     NOT_SPAM,
@@ -248,6 +250,21 @@ class GuestModule:
                 "'email_invites.per_inviter_per_hour'"
             )
 
+        client_room_url = email_invites_config.get("client_room_url")
+        # MAS refuses anything else when an invite is minted
+        if (email_invites_enabled or client_room_url is not None) and (
+            not isinstance(client_room_url, str)
+            or not re.fullmatch(r"https?://[!-~]+", client_room_url)
+            or "{room_id}" not in client_room_url
+            or not urlsplit(client_room_url).netloc
+            or "{" in urlsplit(client_room_url).netloc
+        ):
+            raise ConfigError(
+                "Config option 'email_invites.client_room_url' is required with "
+                "'enabled', and must be an http or https URL in visible ASCII with "
+                f"'{{room_id}}' after its host: {client_room_url!r}"
+            )
+
         return GuestModuleConfig(
             user_id_prefix,
             display_name_suffix,
@@ -261,6 +278,7 @@ class GuestModule:
                 max_emails,
                 per_inviter_per_hour,
                 invite_lifetime,
+                client_room_url,
             ),
         )
 

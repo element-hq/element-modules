@@ -31,6 +31,9 @@ class EmailInvitesConfig:
     per_inviter_per_hour: int = 50
     # In seconds
     invite_lifetime: int = 7 * 24 * 60 * 60
+    # The URL invitees are sent to once signed in, with `{room_id}` standing for the
+    # percent-encoded room ID. Required with `enabled`.
+    client_room_url: Optional[str] = None
 
 
 @attr.s(frozen=True, auto_attribs=True)

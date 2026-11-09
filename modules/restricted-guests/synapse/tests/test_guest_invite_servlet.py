@@ -103,7 +103,11 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
         module, module_api, store = create_module(
             {
                 **mas_config_override(),
-                "email_invites": {"enabled": True, **(email_invites or {})},
+                "email_invites": {
+                    "enabled": True,
+                    "client_room_url": "https://app.example.org/#/room/{room_id}",
+                    **(email_invites or {}),
+                },
                 **(config_override or {}),
             }
         )
@@ -282,7 +286,9 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
                     "passwordless": True,
                     "usage_limit": 1,
                     "expires_at": "1970-01-08T00:00:00+00:00",
-                    "room_id": ROOM_ID,
+                    "continue_url": (
+                        "https://app.example.org/#/room/%21room%3Amatrix.local"
+                    ),
                 }
                 for email in ["alice@example.com", "bob@example.com"]
             ],
