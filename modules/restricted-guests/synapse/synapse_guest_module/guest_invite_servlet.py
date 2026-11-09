@@ -7,6 +7,7 @@ import json
 import logging
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Optional, Tuple
+from urllib.parse import quote
 
 from synapse.api.constants import EventContentFields, EventTypes, JoinRules, Membership
 from synapse.api.errors import HttpResponseException
@@ -160,7 +161,7 @@ class GuestInviteServlet(DirectServeJsonResource):
                 # address sends no email at all
                 token_ids = [
                     await self._mas_admin_client.create_registration_token(
-                        email, username, room_id, expires_at, token
+                        email, username, self._room_url(room_id), expires_at, token
                     )
                     for email in unique_emails.values()
                 ]
@@ -185,6 +186,20 @@ class GuestInviteServlet(DirectServeJsonResource):
             return 502, {"msg": "Failed to send the invites"}
 
         return 202, {"scheduled": scheduled}
+
+    def _room_url(self, room_id: str) -> str:
+        """The URL MAS sends an invitee to for this room, once they're signed in.
+
+        MAS redirects to it without reading it, so `client_room_url` can lead to
+        any client, or to a page that lets the invitee pick one. Only the room ID
+        is filled in: `via` servers, which a client on another homeserver needs
+        to find the room, have to be part of `client_room_url`.
+        """
+        # Checked when the config was parsed
+        assert self._config.email_invites.client_room_url is not None
+        return self._config.email_invites.client_room_url.replace(
+            "{room_id}", quote(room_id, safe="")
+        )
 
     @staticmethod
     def _may_invite(user_id: str, state: StateMap[EventBase]) -> bool:
