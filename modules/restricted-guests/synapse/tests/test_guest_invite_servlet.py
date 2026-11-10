@@ -8,12 +8,19 @@ from typing import Any, Dict, List, Optional, Tuple, cast
 from unittest.mock import Mock
 
 import aiounittest
-from synapse.api.errors import Codes, HttpResponseException, LimitExceededError
+from synapse.api.errors import (
+    Codes,
+    HttpResponseException,
+    LimitExceededError,
+    UnrecognizedRequestError,
+)
 from synapse.api.room_versions import RoomVersions
 from synapse.events import make_event_from_dict
 from synapse.http import RequestTimedOutError
 from synapse.http.site import SynapseRequest
 from synapse.module_api import NOT_SPAM, EventBase, StateMap
+from synapse.util.httpresourcetree import create_resource_tree
+from twisted.web.resource import Resource, getChildForRequest
 from twisted.web.test.requesthelper import DummyRequest
 
 from synapse_guest_module import GuestModule
@@ -24,6 +31,30 @@ INVITER = "@inviter:matrix.local"
 CREATOR = "@creator:matrix.local"
 MINT_URI = "https://mas.example.org/api/admin/v1/user-registration-tokens"
 SEND_URI = "https://mas.example.org/api/admin/v1/user-registration-tokens/invite-emails"
+LINK_ID = "01JABCDEFGHJKMNPQRSTVWXYZ0"
+LINK_URI = f"{MINT_URI}/{LINK_ID}"
+LINKED_ROOM_ID = "!linked:matrix.local"
+LINKED_ROOM_URL = "https://app.example.org/#/room/%21linked%3Amatrix.local"
+
+
+def link_token(**attributes: Any) -> Dict[str, Any]:
+    """MAS's answer to a fetch or update of a listed link, with these attributes"""
+    return {
+        "data": {
+            "id": LINK_ID,
+            "attributes": {
+                "username": "guest-{{ random }}",
+                "continue_url": LINKED_ROOM_URL,
+                "allowed_emails": ["alice@example.com"],
+                "invite_url": "https://mas.example.org/register?token=link",
+                **attributes,
+            },
+        }
+    }
+
+
+def replaced_link(uri: str, json_body: Dict[str, Any], **kwargs: Any) -> Any:
+    return link_token(**json_body)
 
 
 def mas_response(uri: str, post_json: Dict[str, Any], **kwargs: Any) -> Any:
@@ -35,7 +66,8 @@ def mas_response(uri: str, post_json: Dict[str, Any], **kwargs: Any) -> Any:
             "data": {
                 "id": f"token-{name}",
                 "attributes": {
-                    "invite_url": f"https://mas.example.org/register?token={name}"
+                    "invite_url": f"https://mas.example.org/register?token={name}",
+                    "allowed_emails": post_json.get("allowed_emails"),
                 },
             }
         }
@@ -329,7 +361,13 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
 
         self.assertEqual(
             (status, response),
-            (200, {"invite_url": "https://mas.example.org/register?token=link"}),
+            (
+                200,
+                {
+                    "id": "token-link",
+                    "invite_url": "https://mas.example.org/register?token=link",
+                },
+            ),
         )
         call = module_api.http_client.post_json_get_json.call_args
         self.assertEqual(
@@ -357,10 +395,148 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
         self.assertEqual(response["reason"], "room_not_knockable")
         module_api.http_client.post_json_get_json.assert_not_called()
 
+    async def test_invite_link_allowed_emails(self) -> None:
+        module, module_api, _ = self.create_module(
+            email_invites={"max_emails": 2, "per_inviter_per_hour": 2}
+        )
+
+        status, response = await self.render(
+            module,
+            b'{"room_id":"!room:matrix.local",'
+            b'"emails":["Alice@example.com"," alice@example.com","bob@example.com "]}',
+            link=True,
+        )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(response["id"], "token-link")
+        [mint] = mas_calls(module_api, MINT_URI)
+        self.assertEqual(
+            mint["allowed_emails"], ["Alice@example.com", "bob@example.com"]
+        )
+
+    async def test_invite_link_too_many_emails(self) -> None:
+        module, module_api, _ = self.create_module(email_invites={"max_emails": 2})
+
+        status, response = await self.render(
+            module,
+            b'{"room_id":"!room:matrix.local",'
+            b'"emails":["a@example.com","b@example.com","c@example.com"]}',
+            link=True,
+        )
+
+        self.assertEqual(
+            (status, response),
+            (400, {"msg": "You can invite at most 2 emails at once"}),
+        )
+        module_api.http_client.post_json_get_json.assert_not_called()
+
+    async def test_invite_link_null_emails(self) -> None:
+        module, module_api, _ = self.create_module()
+
+        status, response = await self.render(
+            module, b'{"room_id":"!room:matrix.local","emails":null}', link=True
+        )
+
+        self.assertEqual(status, 200)
+        [mint] = mas_calls(module_api, MINT_URI)
+        self.assertNotIn("allowed_emails", mint)
+
+    async def test_invite_link_malformed_emails(self) -> None:
+        module, module_api, _ = self.create_module()
+
+        for emails in [b"[]", b'[" "]', b'["a@example.com",1]', b'"a@example.com"']:
+            with self.subTest(emails):
+                status, response = await self.render(
+                    module,
+                    b'{"room_id":"!room:matrix.local","emails":' + emails + b"}",
+                    link=True,
+                )
+
+                self.assertEqual(status, 400)
+        module_api.http_client.post_json_get_json.assert_not_called()
+
+    async def test_invite_link_spam_checker_refuses_address(self) -> None:
+        module, module_api, _ = self.create_module()
+
+        async def user_may_send_3pid_invite(
+            inviter_userid: str, medium: str, address: str, room_id: str
+        ) -> Any:
+            if address == "bob@example.com":
+                return Codes.FORBIDDEN, {}
+            return NOT_SPAM
+
+        spam_checker = module_api._hs.get_module_api_callbacks.return_value.spam_checker
+        spam_checker.user_may_send_3pid_invite.side_effect = user_may_send_3pid_invite
+
+        status, response = await self.render(
+            module,
+            b'{"room_id":"!room:matrix.local",'
+            b'"emails":["alice@example.com","bob@example.com"]}',
+            link=True,
+        )
+
+        self.assertEqual(status, 403)
+        module_api.http_client.post_json_get_json.assert_not_called()
+
+    async def test_invite_link_third_party_rules_refuse_address(self) -> None:
+        module, module_api, _ = self.create_module()
+
+        async def check_threepid_can_be_invited(
+            medium: str, address: str, room_id: str
+        ) -> bool:
+            return address != "bob@example.com"
+
+        third_party_rules = (
+            module_api._hs.get_module_api_callbacks.return_value.third_party_event_rules
+        )
+        third_party_rules.check_threepid_can_be_invited.side_effect = (
+            check_threepid_can_be_invited
+        )
+
+        status, response = await self.render(
+            module,
+            b'{"room_id":"!room:matrix.local",'
+            b'"emails":["alice@example.com","bob@example.com"]}',
+            link=True,
+        )
+
+        self.assertEqual(status, 403)
+        module_api.http_client.post_json_get_json.assert_not_called()
+
+    async def test_invite_link_limit_counts_one(self) -> None:
+        module, module_api, _ = self.create_module(
+            email_invites={"max_emails": 2, "per_inviter_per_hour": 2}
+        )
+        two_emails = (
+            b'{"room_id":"!room:matrix.local",'
+            b'"emails":["a@example.com","b@example.com"]}'
+        )
+
+        for _ in range(2):
+            status, _ = await self.render(module, two_emails, link=True)
+            self.assertEqual(status, 200)
+
+        with self.assertRaises(LimitExceededError):
+            await self.render(module, two_emails, link=True)
+
+    async def test_invite_link_mas_refuses(self) -> None:
+        module, module_api, _ = self.create_module()
+        module_api.http_client.post_json_get_json.side_effect = HttpResponseException(
+            400, "Bad Request", b'{"errors":[{"title":"Email is banned"}]}'
+        )
+
+        status, response = await self.render(
+            module,
+            b'{"room_id":"!room:matrix.local","emails":["alice@example.com"]}',
+            link=True,
+        )
+
+        self.assertEqual((status, response), (400, {"msg": "Email is banned"}))
+
     async def test_invite_link_mas_error(self) -> None:
         module, module_api, _ = self.create_module()
         module_api.http_client.post_json_get_json.side_effect = HttpResponseException(
-            400, "Bad Request", b'{"errors":[{"title":"Invalid username"}]}'
+            409, "Conflict", b'{"errors":[{"title":"Username taken"}]}'
         )
 
         with self.assertLogs("synapse.contrib", "ERROR"):
@@ -369,6 +545,53 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
             )
 
         self.assertEqual(status, 502)
+
+    async def test_invite_link_mas_token_refused(self) -> None:
+        module, module_api, _ = self.create_module()
+        module_api.http_client.post_urlencoded_get_json.side_effect = (
+            HttpResponseException(400, "Bad Request", b'{"error":"invalid_client"}')
+        )
+
+        with self.assertLogs("synapse.contrib", "ERROR"):
+            status, response = await self.render(
+                module, b'{"room_id":"!room:matrix.local"}', link=True
+            )
+
+        self.assertEqual(status, 502)
+        module_api.http_client.post_json_get_json.assert_not_called()
+
+    async def test_invite_link_mas_timeout(self) -> None:
+        module, module_api, _ = self.create_module()
+        module_api.http_client.post_json_get_json.side_effect = RequestTimedOutError(
+            "Timeout"
+        )
+
+        with self.assertLogs("synapse.contrib", "ERROR"):
+            status, response = await self.render(
+                module, b'{"room_id":"!room:matrix.local"}', link=True
+            )
+
+        self.assertEqual(status, 502)
+
+    async def test_invite_link_mas_ignores_allowed_emails(self) -> None:
+        module, module_api, _ = self.create_module()
+
+        def ignore_allowed_emails(
+            uri: str, post_json: Dict[str, Any], **kwargs: Any
+        ) -> Any:
+            return mas_response(uri, {**post_json, "allowed_emails": None})
+
+        module_api.http_client.post_json_get_json.side_effect = ignore_allowed_emails
+
+        with self.assertLogs("synapse.contrib", "WARNING"):
+            status, response = await self.render(
+                module,
+                b'{"room_id":"!room:matrix.local","emails":["alice@example.com"]}',
+                link=True,
+            )
+
+        self.assertEqual(status, 502)
+        self.assertNotIn("invite_url", response)
 
     async def test_invite_lifetime(self) -> None:
         module, module_api, _ = self.create_module(
@@ -418,7 +641,10 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
             b'"emails":["a@example.com","b@example.com","c@example.com"]}',
         )
 
-        self.assertEqual(status, 400)
+        self.assertEqual(
+            (status, response),
+            (400, {"msg": "You can invite at most 2 emails at once"}),
+        )
         module_api.http_client.post_json_get_json.assert_not_called()
 
     async def test_limit_counts_emails(self) -> None:
@@ -635,3 +861,394 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
             medium="email", address="bob@example.com", room_id=ROOM_ID
         )
         module_api.http_client.post_json_get_json.assert_not_called()
+
+    async def render_put(
+        self,
+        module: GuestModule,
+        body: bytes = b'{"room_id":"!linked:matrix.local","emails":["bob@example.com"]}',
+        postpath: Optional[List[bytes]] = None,
+    ) -> Tuple[int, Any]:
+        assert module.invite_link_servlet is not None
+        request = cast(
+            SynapseRequest,
+            DummyRequest([LINK_ID.encode()] if postpath is None else postpath),
+        )
+        request.content = io.BytesIO(body)
+        return await module.invite_link_servlet._async_render_PUT(request)
+
+    def create_link_module(
+        self, email_invites: Optional[Dict[str, Any]] = None, **attributes: Any
+    ) -> Tuple[GuestModule, Mock]:
+        module, module_api, _ = self.create_module(email_invites=email_invites)
+        module_api.http_client.get_json.return_value = link_token(**attributes)
+        module_api.http_client.put_json.side_effect = replaced_link
+        return module, module_api
+
+    async def test_link_path_routes_to_link_servlet(self) -> None:
+        module, _, _ = self.create_module()
+        root = create_resource_tree(
+            {
+                "/_synapse/client/invite_guests": cast(Resource, module.invite_servlet),
+                "/_synapse/client/invite_guests/link": cast(
+                    Resource, module.invite_link_servlet
+                ),
+            },
+            Resource(),  # type: ignore[no-untyped-call]
+        )
+
+        for path, postpath in [
+            (b"_synapse/client/invite_guests/link", []),
+            (
+                b"_synapse/client/invite_guests/link/" + LINK_ID.encode(),
+                [LINK_ID.encode()],
+            ),
+        ]:
+            request = DummyRequest(path.split(b"/"))
+            child = getChildForRequest(root, request)  # type: ignore[no-untyped-call]
+            self.assertIs(child, module.invite_link_servlet)
+            self.assertEqual(request.postpath, postpath)
+
+    async def test_link_unknown_paths(self) -> None:
+        module, module_api = self.create_link_module()
+
+        for postpath in [[], [LINK_ID.encode(), b"x"]]:
+            with self.assertRaises(UnrecognizedRequestError):
+                await self.render_put(module, postpath=postpath)
+
+        assert module.invite_link_servlet is not None
+        request = cast(SynapseRequest, DummyRequest([LINK_ID.encode()]))
+        request.content = io.BytesIO(b'{"room_id":"!room:matrix.local"}')
+        with self.assertRaises(UnrecognizedRequestError):
+            await module.invite_link_servlet._async_render_POST(request)
+        module_api.http_client.post_json_get_json.assert_not_called()
+
+    async def test_replace_link_emails(self) -> None:
+        module, module_api = self.create_link_module()
+        third_party_rules = (
+            module_api._hs.get_module_api_callbacks.return_value.third_party_event_rules
+        )
+
+        status, response = await self.render_put(
+            module,
+            b'{"room_id":"!linked:matrix.local",'
+            b'"emails":["Carol@example.com"," carol@example.com","dave@example.com"]}',
+        )
+
+        self.assertEqual(
+            (status, response),
+            (
+                200,
+                {
+                    "id": LINK_ID,
+                    "invite_url": "https://mas.example.org/register?token=link",
+                },
+            ),
+        )
+        self.assertEqual(
+            module_api.http_client.get_json.call_args.kwargs["uri"], LINK_URI
+        )
+        module_api.get_room_state.assert_called_once()
+        self.assertEqual(module_api.get_room_state.call_args.args[0], LINKED_ROOM_ID)
+        third_party_rules.check_threepid_can_be_invited.assert_any_call(
+            medium="email", address="dave@example.com", room_id=LINKED_ROOM_ID
+        )
+        put = module_api.http_client.put_json.call_args.kwargs
+        self.assertEqual(put["uri"], LINK_URI)
+        self.assertEqual(
+            put["json_body"],
+            {"allowed_emails": ["Carol@example.com", "dave@example.com"]},
+        )
+
+    async def test_replace_link_not_a_ulid(self) -> None:
+        module, module_api = self.create_link_module()
+
+        for link_id in [b"", b"01JLINK", LINK_ID.encode()[:-1], b"../users/x"]:
+            with self.subTest(link_id):
+                status, response = await self.render_put(module, postpath=[link_id])
+
+                self.assertEqual(
+                    (status, response), (404, {"msg": "Unknown invite link"})
+                )
+        module_api.get_user_by_req.assert_not_called()
+        module_api.http_client.post_urlencoded_get_json.assert_not_called()
+        module_api.http_client.get_json.assert_not_called()
+
+    async def test_replace_link_lowercase_ulid(self) -> None:
+        module, module_api = self.create_link_module()
+
+        status, response = await self.render_put(
+            module, postpath=[LINK_ID.lower().encode()]
+        )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            module_api.http_client.get_json.call_args.kwargs["uri"],
+            f"{MINT_URI}/{LINK_ID.lower()}",
+        )
+
+    async def test_replace_link_guest_sender(self) -> None:
+        module, module_api = self.create_link_module()
+        module_api.get_user_by_req.return_value.user.to_string.return_value = (
+            "@guest-asdf:matrix.local"
+        )
+
+        status, response = await self.render_put(module)
+
+        self.assertEqual(
+            (status, response), (403, {"msg": "Guests can't invite guests"})
+        )
+        module_api.http_client.post_urlencoded_get_json.assert_not_called()
+        module_api.http_client.get_json.assert_not_called()
+
+    async def test_replace_link_by_another_member(self) -> None:
+        module, module_api = self.create_link_module()
+        other = "@other:matrix.local"
+        module_api.get_user_by_req.return_value.user.to_string.return_value = other
+        module_api.get_room_state.return_value = {
+            **room_state(power_levels={"invite": 50, "users": {other: 50}}),
+            ("m.room.member", other): state_event(
+                "m.room.member", {"membership": "join"}, other, other
+            ),
+        }
+
+        status, response = await self.render_put(module)
+
+        self.assertEqual(status, 200)
+
+    async def test_replace_link_may_no_longer_invite(self) -> None:
+        module, module_api = self.create_link_module()
+        module_api.get_room_state.return_value = room_state(power_levels={"invite": 50})
+
+        status, response = await self.render_put(module)
+
+        self.assertEqual(status, 403)
+        module_api.http_client.put_json.assert_not_called()
+
+    async def test_replace_link_unknown(self) -> None:
+        module, module_api = self.create_link_module()
+        module_api.http_client.get_json.side_effect = HttpResponseException(
+            404, "Not Found", b'{"errors":[{"title":"Not found"}]}'
+        )
+
+        status, response = await self.render_put(module)
+
+        self.assertEqual(status, 404)
+        module_api.http_client.put_json.assert_not_called()
+
+    async def test_replace_link_not_a_listed_link_to_the_room(self) -> None:
+        cases: List[Dict[str, Any]] = [
+            {"continue_url": None},
+            {"continue_url": LINKED_ROOM_URL.replace("linked", "other")},
+            {"allowed_emails": None},
+        ]
+        for attributes in cases:
+            with self.subTest(attributes):
+                module, module_api = self.create_link_module(**attributes)
+
+                status, response = await self.render_put(module)
+
+                self.assertEqual(
+                    (status, response), (404, {"msg": "Unknown invite link"})
+                )
+                module_api.http_client.put_json.assert_not_called()
+
+    async def test_replace_link_missing_room_id(self) -> None:
+        module, module_api = self.create_link_module()
+
+        for body in [
+            b'{"emails":["bob@example.com"]}',
+            b'{"room_id":"#linked:matrix.local","emails":["bob@example.com"]}',
+        ]:
+            with self.subTest(body):
+                status, response = await self.render_put(module, body)
+
+                self.assertEqual(
+                    (status, response),
+                    (400, {"msg": "You must provide a valid 'room_id'"}),
+                )
+        module_api.http_client.get_json.assert_not_called()
+
+    async def test_replace_link_malformed_emails(self) -> None:
+        module, module_api = self.create_link_module(email_invites={"max_emails": 2})
+
+        for emails in [
+            b"",
+            b',"emails":[]',
+            b',"emails":[" "]',
+            b',"emails":["a@example.com",1]',
+            b',"emails":"a@example.com"',
+        ]:
+            with self.subTest(emails):
+                status, response = await self.render_put(
+                    module, b'{"room_id":"!linked:matrix.local"' + emails + b"}"
+                )
+
+                self.assertEqual(
+                    (status, response),
+                    (
+                        400,
+                        {
+                            "msg": "You must provide 'emails' as a non-empty list "
+                            "of strings"
+                        },
+                    ),
+                )
+
+        status, response = await self.render_put(
+            module,
+            b'{"room_id":"!linked:matrix.local",'
+            b'"emails":["a@example.com","b@example.com","c@example.com"]}',
+        )
+
+        self.assertEqual(
+            (status, response),
+            (400, {"msg": "You can invite at most 2 emails at once"}),
+        )
+        module_api.http_client.get_json.assert_not_called()
+
+    async def test_replace_link_refused_address(self) -> None:
+        module, module_api = self.create_link_module()
+        third_party_rules = (
+            module_api._hs.get_module_api_callbacks.return_value.third_party_event_rules
+        )
+        third_party_rules.check_threepid_can_be_invited.return_value = make_awaitable(
+            False
+        )
+
+        status, response = await self.render_put(module)
+
+        self.assertEqual(status, 403)
+        module_api.http_client.put_json.assert_not_called()
+
+    async def test_replace_link_spam_checker_refuses_address(self) -> None:
+        module, module_api = self.create_link_module()
+        spam_checker = module_api._hs.get_module_api_callbacks.return_value.spam_checker
+        spam_checker.user_may_send_3pid_invite.return_value = make_awaitable(
+            (Codes.FORBIDDEN, {})
+        )
+
+        status, response = await self.render_put(module)
+
+        self.assertEqual(status, 403)
+        spam_checker.user_may_send_3pid_invite.assert_called_once_with(
+            inviter_userid=INVITER,
+            medium="email",
+            address="bob@example.com",
+            room_id=LINKED_ROOM_ID,
+        )
+        module_api.http_client.put_json.assert_not_called()
+
+    async def test_link_limit_shared_with_replacing(self) -> None:
+        module, module_api = self.create_link_module(
+            email_invites={"max_emails": 1, "per_inviter_per_hour": 1}
+        )
+
+        status, _ = await self.render(
+            module, b'{"room_id":"!room:matrix.local"}', link=True
+        )
+        self.assertEqual(status, 200)
+
+        with self.assertRaises(LimitExceededError):
+            await self.render_put(module)
+        module_api.http_client.get_json.assert_not_called()
+
+    async def test_replace_link_refused_room_keeps_limit(self) -> None:
+        module, module_api = self.create_link_module(
+            email_invites={"max_emails": 1, "per_inviter_per_hour": 1}
+        )
+        module_api.get_room_state.return_value = room_state(power_levels={"invite": 50})
+
+        status, _ = await self.render_put(module)
+        self.assertEqual(status, 403)
+
+        module_api.get_room_state.return_value = room_state()
+        status, _ = await self.render_put(module)
+        self.assertEqual(status, 200)
+
+    async def test_replace_link_unknown_spends_limit(self) -> None:
+        module, module_api = self.create_link_module(
+            email_invites={"max_emails": 1, "per_inviter_per_hour": 1},
+            continue_url=None,
+        )
+
+        status, _ = await self.render_put(module)
+        self.assertEqual(status, 404)
+
+        with self.assertRaises(LimitExceededError):
+            await self.render_put(module)
+
+    async def test_replace_link_limit_counts_one(self) -> None:
+        module, module_api = self.create_link_module(
+            email_invites={"max_emails": 2, "per_inviter_per_hour": 2}
+        )
+        two_emails = (
+            b'{"room_id":"!linked:matrix.local",'
+            b'"emails":["a@example.com","b@example.com"]}'
+        )
+
+        for _ in range(2):
+            status, _ = await self.render_put(module, two_emails)
+            self.assertEqual(status, 200)
+
+        with self.assertRaises(LimitExceededError):
+            await self.render_put(module, two_emails)
+
+    async def test_replace_link_mas_refuses(self) -> None:
+        module, module_api = self.create_link_module()
+        module_api.http_client.put_json.side_effect = HttpResponseException(
+            400, "Bad Request", b'{"errors":[{"title":"Email is banned"}]}'
+        )
+
+        status, response = await self.render_put(module)
+
+        self.assertEqual((status, response), (400, {"msg": "Email is banned"}))
+
+    async def test_replace_link_deleted_before_replacing(self) -> None:
+        module, module_api = self.create_link_module()
+        module_api.http_client.put_json.side_effect = HttpResponseException(
+            404, "Not Found", b'{"errors":[{"title":"Not found"}]}'
+        )
+
+        status, response = await self.render_put(module)
+
+        self.assertEqual((status, response), (404, {"msg": "Unknown invite link"}))
+
+    async def test_replace_link_mas_token_refused(self) -> None:
+        module, module_api = self.create_link_module()
+        module_api.http_client.post_urlencoded_get_json.side_effect = (
+            HttpResponseException(400, "Bad Request", b'{"error":"invalid_client"}')
+        )
+
+        with self.assertLogs("synapse.contrib", "ERROR"):
+            status, response = await self.render_put(module)
+
+        self.assertEqual(status, 502)
+        module_api.http_client.get_json.assert_not_called()
+
+    async def test_replace_link_mas_timeout(self) -> None:
+        for method in ["get_json", "put_json"]:
+            with self.subTest(method):
+                module, module_api = self.create_link_module()
+                getattr(
+                    module_api.http_client, method
+                ).side_effect = RequestTimedOutError("Timeout")
+
+                with self.assertLogs("synapse.contrib", "ERROR"):
+                    status, response = await self.render_put(module)
+
+                self.assertEqual(status, 502)
+
+    async def test_replace_link_mas_errors(self) -> None:
+        for method in ["get_json", "put_json"]:
+            with self.subTest(method):
+                module, module_api = self.create_link_module()
+                getattr(
+                    module_api.http_client, method
+                ).side_effect = HttpResponseException(
+                    500, "Internal Server Error", b"{}"
+                )
+
+                with self.assertLogs("synapse.contrib", "ERROR"):
+                    status, response = await self.render_put(module)
+
+                self.assertEqual(status, 502)

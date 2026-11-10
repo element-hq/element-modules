@@ -22,6 +22,8 @@ logger = logging.getLogger("synapse.contrib." + __name__)
 class RegistrationToken:
     id: str
     invite_url: str
+    continue_url: Optional[str]
+    allowed_emails: Optional[list[str]]
 
 
 class MasAdminClient:
@@ -103,6 +105,7 @@ class MasAdminClient:
         email: Optional[str] = None,
         usage_limit: Optional[int] = None,
         expires_at: Optional[datetime] = None,
+        allowed_emails: Optional[list[str]] = None,
     ) -> RegistrationToken:
         """Has MAS mint a passwordless invite code.
 
@@ -113,6 +116,8 @@ class MasAdminClient:
             email: The address the invite code is pinned to, if any.
             usage_limit: How many times it can be used, if limited.
             expires_at: When it expires, timezone-aware, if it does.
+            allowed_emails: The only addresses its users may register with, if
+                limited.
 
         Raises:
             ValueError: If the response has no `data.id` or `invite_url`.
@@ -125,25 +130,54 @@ class MasAdminClient:
             "email": email,
             "usage_limit": usage_limit,
             "expires_at": expires_at.isoformat() if expires_at is not None else None,
+            "allowed_emails": allowed_emails,
         }
         response = await self._api.http_client.post_json_get_json(
             uri=self._build_admin_url("/api/admin/v1/user-registration-tokens"),
             post_json={key: value for key, value in body.items() if value is not None},
             headers={"Authorization": [f"Bearer {token}"]},
         )
+        return _registration_token(response)
 
-        data = response.get("data")
-        token_id = data.get("id") if isinstance(data, dict) else None
-        attributes = data.get("attributes") if isinstance(data, dict) else None
-        invite_url = (
-            attributes.get("invite_url") if isinstance(attributes, dict) else None
+    async def get_registration_token(
+        self, token_id: str, token: str
+    ) -> RegistrationToken:
+        """Fetches an invite code from MAS.
+
+        Args:
+            token_id: The invite code's ID.
+            token: An admin access token from `request_admin_token`.
+
+        Raises:
+            ValueError: If the response has no `data.id` or `invite_url`.
+            HttpResponseException: On a non-2xx HTTP response.
+        """
+        response = await self._api.http_client.get_json(
+            uri=self._build_registration_token_url(token_id),
+            headers={"Authorization": [f"Bearer {token}"]},
         )
-        if not isinstance(token_id, str) or not isinstance(invite_url, str):
-            raise ValueError(
-                "MAS registration token response missing `data.id` or `invite_url`"
-            )
+        return _registration_token(response)
 
-        return RegistrationToken(token_id, invite_url)
+    async def set_allowed_emails(
+        self, token_id: str, allowed_emails: list[str], token: str
+    ) -> RegistrationToken:
+        """Has MAS replace the addresses allowed to register with an invite code.
+
+        Args:
+            token_id: The invite code's ID.
+            allowed_emails: The only addresses its users may register with.
+            token: An admin access token from `request_admin_token`.
+
+        Raises:
+            ValueError: If the response has no `data.id` or `invite_url`.
+            HttpResponseException: On a non-2xx HTTP response.
+        """
+        response = await self._api.http_client.put_json(
+            uri=self._build_registration_token_url(token_id),
+            json_body={"allowed_emails": allowed_emails},
+            headers={"Authorization": [f"Bearer {token}"]},
+        )
+        return _registration_token(response)
 
     async def send_invite_emails(
         self,
@@ -282,7 +316,44 @@ class MasAdminClient:
             path = "/" + path
         return f"{self._admin_api_base_url}{path}"
 
+    def _build_registration_token_url(self, token_id: str) -> str:
+        return self._build_admin_url(
+            f"/api/admin/v1/user-registration-tokens/{token_id}"
+        )
+
     def _build_oauth_url(self, path: str) -> str:
         if not path.startswith("/"):
             path = "/" + path
         return f"{self._oauth_base_url}{path}"
+
+
+def _registration_token(response: Any) -> RegistrationToken:
+    """The invite code in a MAS admin API response, `{"data": {"id", "attributes"}}`.
+
+    Raises:
+        ValueError: If the response has no `data.id` or `invite_url`.
+    """
+    data = response.get("data")
+    token_id = data.get("id") if isinstance(data, dict) else None
+    attributes = data.get("attributes") if isinstance(data, dict) else None
+    if not isinstance(attributes, dict):
+        attributes = {}
+    invite_url = attributes.get("invite_url")
+    if not isinstance(token_id, str) or not isinstance(invite_url, str):
+        raise ValueError(
+            "MAS registration token response missing `data.id` or `invite_url`"
+        )
+
+    continue_url = attributes.get("continue_url")
+    allowed_emails = attributes.get("allowed_emails")
+    return RegistrationToken(
+        token_id,
+        invite_url,
+        continue_url if isinstance(continue_url, str) else None,
+        (
+            allowed_emails
+            if isinstance(allowed_emails, list)
+            and all(isinstance(email, str) for email in allowed_emails)
+            else None
+        ),
+    )

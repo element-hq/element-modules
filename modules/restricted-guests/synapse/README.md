@@ -76,7 +76,7 @@ API](https://element-hq.github.io/matrix-authentication-service/topics/admin-api
 
 - `email_invites` - optional configuration for [inviting guests by email](#inviting-guests-by-email). Requires `mas`.
     - `enabled` - if true, the module serves `/_synapse/client/invite_guests`. Only enable it on a server with closed registration. Default: `false`.
-    - `max_emails` - the most addresses one request can invite. It can't exceed `per_inviter_per_hour`. Default: `20`.
+    - `max_emails` - the most addresses one request can invite, or list on a link. It can't exceed `per_inviter_per_hour`. Default: `20`.
     - `per_inviter_per_hour` - how many addresses one user can invite per hour, on average. Up to this many can go at once, and the allowance then refills over the next hour, so one hour can see nearly twice this many. Each worker counts separately, and the count resets when Synapse restarts. Default: `50`.
     - `invite_lifetime` - how long an invite link stays valid, in seconds. Default: `604800` (7 days).
     - `client_room_url` - where invitees are sent once they have signed up or signed in, with `{room_id}` standing for the percent-encoded room ID, such as `https://app.example.org/#/room/{room_id}`. It must be an `http` or `https` URL. Required with `enabled`. See [where invite links lead](#where-invite-links-lead).
@@ -221,18 +221,63 @@ and refuses callers and rooms the same way, including `block_non_admin_invites`.
 request counts once against `per_inviter_per_hour`, separately from email invites.
 
 ```json
-{ "room_id": "!room:example.org" }
+{
+    "room_id": "!room:example.org",
+    "emails": ["alice@example.com", "bob@example.com"]
+}
 ```
 
-MAS mints an invite code with no address and no usage limit, and the response has its link:
+`emails` is optional, and lists the only addresses allowed to use the link, such as a
+meeting's participants. They're checked as for `/_synapse/client/invite_guests`:
+deduplicated ignoring case, at most `max_emails`, and each put to the third-party rules
+and spam checker callbacks. No email is sent, so the request counts once however many
+addresses it lists. Without `emails`, or with `"emails": null`, anyone may use the link.
+
+MAS mints an invite code with no usage limit, and the response has its ID and link:
 
 ```json
-{ "invite_url": "https://auth.example.org/register?token=…" }
+{
+    "id": "01JABCDEFGHJKMNPQRSTVWXYZ0",
+    "invite_url": "https://auth.example.org/register?token=…"
+}
 ```
 
 Anyone who follows the link signs up as a guest, with a localpart starting with
-`user_id_prefix`. The endpoint answers 400 for a missing or malformed `room_id`, the 403 and 429
-of `/_synapse/client/invite_guests`, and 502 if MAS fails or can't be reached.
+`user_id_prefix`. With `emails`, MAS only lets them sign up with a verified address on the
+list. The endpoint answers 400 for a missing or malformed
+`room_id` or `emails`, or with MAS's message in `msg` if MAS refuses the request, the 403 and 429
+of `/_synapse/client/invite_guests`, and 502 if MAS fails otherwise, can't be reached, or is too
+old to hold a link to `emails`.
+
+`PUT /_synapse/client/invite_guests/link/{id}` replaces the addresses allowed to use a
+link, with the `id` from its response. The body names the link's room and holds the whole
+new list, both checked as when making a link:
+
+```json
+{
+    "room_id": "!room:example.org",
+    "emails": ["alice@example.com", "carol@example.com"]
+}
+```
+
+Anyone who may make a link to the link's room may replace its list, not only the caller who
+made it. Neither the module nor MAS records which room a link is for, so the caller names
+it, and the module checks that the link leads where a link to that room would, with
+the current `client_room_url`. A link made before `client_room_url` changed can no longer
+be edited. Each request counts once against `per_inviter_per_hour`, with the links the
+caller makes, once the caller, the room and the addresses have passed and before the
+module asks MAS about the link. The response is the same as when making a link.
+
+Taking an address off the list doesn't remove anyone from the room. A guest who signed up
+with it keeps their account and stays joined, and a request to join stays until a member
+denies it. The list only stops sign-ups through the link from then on, so
+removing someone is an ordinary kick.
+
+The endpoint answers 404 for an ID that isn't a ULID or that MAS doesn't know, or for an
+invite code that isn't a link to `room_id` or has no `emails`. It answers 400 for a missing or
+malformed `room_id` or `emails`,
+or with MAS's message in `msg` if MAS refuses the list, the 403 and 429 of
+`/_synapse/client/invite_guests`, and 502 if MAS fails otherwise or can't be reached.
 
 ## Production installation
 
