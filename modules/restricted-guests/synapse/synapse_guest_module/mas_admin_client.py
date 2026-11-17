@@ -24,6 +24,8 @@ class RegistrationToken:
     invite_url: str
     continue_url: Optional[str]
     allowed_emails: Optional[list[str]]
+    # Neither revoked, expired nor used up
+    valid: bool
 
 
 class MasAdminClient:
@@ -357,4 +359,5 @@ def _registration_token(response: Any) -> RegistrationToken:
             and all(isinstance(email, str) for email in allowed_emails)
             else None
         ),
+        attributes.get("valid") is True,
     )

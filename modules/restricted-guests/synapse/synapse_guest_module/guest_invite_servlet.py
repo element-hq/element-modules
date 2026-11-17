@@ -463,8 +463,12 @@ class GuestInviteLinkServlet(GuestInviteServlet):
                 e, "Failed to update the invite link", unknown_link=True
             )
 
-        # Only listed links to this room: an open link stays open
-        if link.continue_url != self._room_url(room_id) or link.allowed_emails is None:
+        # Only listed links to this room that still work: an open link stays open
+        if (
+            link.continue_url != self._room_url(room_id)
+            or link.allowed_emails is None
+            or not link.valid
+        ):
             return 404, {"msg": "Unknown invite link"}
 
         logger.info(

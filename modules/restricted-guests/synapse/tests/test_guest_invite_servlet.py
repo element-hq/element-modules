@@ -48,6 +48,7 @@ def link_token(**attributes: Any) -> Dict[str, Any]:
                 "continue_url": LINKED_ROOM_URL,
                 "allowed_emails": ["alice@example.com"],
                 "invite_url": "https://mas.example.org/register?token=link",
+                "valid": True,
                 **attributes,
             },
         }
@@ -1113,6 +1114,7 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
             {"continue_url": None},
             {"continue_url": LINKED_ROOM_URL.replace("linked", "other")},
             {"allowed_emails": None},
+            {"valid": False},
         ]
         for attributes in cases:
             with self.subTest(attributes):

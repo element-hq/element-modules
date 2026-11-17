@@ -291,7 +291,8 @@ denies it. The list only stops sign-ups through the link from then on, so
 removing someone is an ordinary kick.
 
 The endpoint answers 404 for an ID that isn't a ULID or that MAS doesn't know, or for an
-invite code that isn't a link to `room_id` or has no `emails`. It answers 400 for a missing or
+invite code that isn't a link to `room_id`, has no `emails`, or has expired or been
+revoked. Editing a link doesn't change when it expires. It answers 400 for a missing or
 malformed `room_id` or `emails`,
 or with MAS's message in `msg` if MAS refuses the list, the 403 and 429 of
 `/_synapse/client/invite_guests`, and 502 if MAS fails otherwise or can't be reached.
