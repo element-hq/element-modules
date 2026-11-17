@@ -282,8 +282,8 @@ made it. Neither the module nor MAS records which room a link is for, so the cal
 it, and the module checks that the link leads where a link to that room would, with
 the current `client_room_url`. A link made before `client_room_url` changed can no longer
 be edited. Each request counts once against `per_inviter_per_hour`, with the links the
-caller makes, once the caller, the room and the addresses have passed and before the
-module asks MAS about the link. The response is the same as when making a link.
+caller makes, once the caller and the room have passed and before the addresses are
+checked or the module asks MAS about the link. The response is the same as when making a link.
 
 Taking an address off the list doesn't remove anyone from the room. A guest who signed up
 with it keeps their account and stays joined, and a request to join stays until a member
