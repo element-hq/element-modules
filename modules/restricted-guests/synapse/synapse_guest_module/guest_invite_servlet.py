@@ -6,7 +6,7 @@
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple, Union
 from urllib.parse import quote
 
 from synapse.api.constants import EventContentFields, EventTypes, JoinRules, Membership
@@ -26,7 +26,11 @@ from synapse.module_api import (
     parse_json_object_from_request,
 )
 
-from synapse_guest_module.config import GuestModuleConfig
+from synapse_guest_module.config import (
+    EmailInvitesConfig,
+    GuestModuleConfig,
+    InviteLinksConfig,
+)
 from synapse_guest_module.mas_admin_client import MasAdminClient
 
 logger = logging.getLogger("synapse.contrib." + __name__)
@@ -67,7 +71,7 @@ class GuestInviteServlet(DirectServeJsonResource):
         )
 
         # Per worker, and reset on restart
-        per_hour = config.guest_invites.email.per_inviter_per_hour
+        per_hour = self._kind_config().per_inviter_per_hour
         self._ratelimiter = Ratelimiter(
             store=api._hs.get_datastores().main,
             clock=api._hs.get_clock(),
@@ -195,10 +199,12 @@ class GuestInviteServlet(DirectServeJsonResource):
 
         return 202, {"scheduled": scheduled}
 
+    def _kind_config(self) -> Union[EmailInvitesConfig, InviteLinksConfig]:
+        return self._config.guest_invites.email
+
     def _expires_at(self) -> datetime:
         return datetime.fromtimestamp(
-            self._api._hs.get_clock().time()
-            + self._config.guest_invites.email.lifetime,
+            self._api._hs.get_clock().time() + self._kind_config().lifetime,
             tz=timezone.utc,
         )
 
@@ -297,11 +303,14 @@ class GuestInviteLinkServlet(GuestInviteServlet):
     `room_id` property.
 
     MAS mints an invite code with no address and no usage limit, expiring after
-    `email.lifetime`. Nothing exists on this homeserver until someone follows the
+    `links.lifetime`. Nothing exists on this homeserver until someone follows the
     link, and MAS assigns each guest's localpart then.
     """
 
     _ratelimiter_key = "guest_module_invite_guest_links"
+
+    def _kind_config(self) -> Union[EmailInvitesConfig, InviteLinksConfig]:
+        return self._config.guest_invites.links
 
     async def _async_render_POST(
         self, request: SynapseRequest

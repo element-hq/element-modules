@@ -110,6 +110,7 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
         self,
         config_override: Optional[Dict[str, Any]] = None,
         email: Optional[Dict[str, Any]] = None,
+        links: Optional[Dict[str, Any]] = None,
         block_non_admin_invites: bool = False,
     ) -> Tuple[GuestModule, Mock, SQLiteStore]:
         module, module_api, store = create_module(
@@ -118,6 +119,7 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
                 "guest_invites": {
                     "client_room_url": "https://app.example.org/#/room/{room_id}",
                     "email": {"enabled": True, **(email or {})},
+                    "links": {"enabled": True, **(links or {})},
                 },
                 **(config_override or {}),
             },
@@ -175,6 +177,32 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
         module_api.register_web_resource.assert_any_call(
             "/_synapse/client/invite_guests/link", module.invite_link_servlet
         )
+
+    async def test_each_kind_enabled_alone(self) -> None:
+        for kind, servlet, path in [
+            ("email", "invite_servlet", "/_synapse/client/invite_guests"),
+            ("links", "invite_link_servlet", "/_synapse/client/invite_guests/link"),
+        ]:
+            with self.subTest(kind):
+                module, module_api, _ = create_module(
+                    {
+                        **mas_config_override(),
+                        "guest_invites": {
+                            "client_room_url": "https://app.example.org/#/{room_id}",
+                            kind: {"enabled": True},
+                        },
+                    }
+                )
+
+                self.assertEqual(
+                    [
+                        c.args[0]
+                        for c in module_api.register_web_resource.call_args_list
+                        if c.args[0].startswith("/_synapse/client/invite_guests")
+                    ],
+                    [path],
+                )
+                self.assertIsNotNone(getattr(module, servlet))
 
     async def test_no_servlet_when_disabled(self) -> None:
         module, module_api, _ = create_module(mas_config_override())
@@ -359,7 +387,8 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
 
     async def test_invite_link_limit(self) -> None:
         module, _, _ = self.create_module(
-            email={"max_emails": 1, "per_inviter_per_hour": 1}
+            email={"max_emails": 1, "per_inviter_per_hour": 1},
+            links={"per_inviter_per_hour": 1},
         )
         link = b'{"room_id":"!room:matrix.local"}'
 
@@ -376,6 +405,19 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
         with self.assertRaises(LimitExceededError) as cm:
             await self.render(module)
         self.assertEqual(cm.exception.limiter_name, "guest_module_invite_guests")
+
+    async def test_invite_link_lifetime(self) -> None:
+        module, module_api, _ = self.create_module(
+            email={"lifetime": 60}, links={"lifetime": 3600}
+        )
+
+        status, _ = await self.render(
+            module, b'{"room_id":"!room:matrix.local"}', link=True
+        )
+
+        self.assertEqual(status, 200)
+        [mint] = mas_calls(module_api, MINT_URI)
+        self.assertEqual(mint["expires_at"], "1970-01-01T01:00:00+00:00")
 
     async def test_invite_link_room_not_knockable(self) -> None:
         module, module_api, _ = self.create_module()

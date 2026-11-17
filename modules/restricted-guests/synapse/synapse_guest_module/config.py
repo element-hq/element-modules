@@ -35,11 +35,20 @@ class EmailInvitesConfig:
 
 
 @attr.s(frozen=True, auto_attribs=True)
+class InviteLinksConfig:
+    enabled: bool = False
+    per_inviter_per_hour: int = 50
+    # In seconds
+    lifetime: int = 7 * 24 * 60 * 60
+
+
+@attr.s(frozen=True, auto_attribs=True)
 class GuestInvitesConfig:
     # The URL invitees are sent to once signed in, with `{room_id}` standing for the
     # percent-encoded room ID. Required when a kind of invite is enabled.
     client_room_url: Optional[str] = None
     email: EmailInvitesConfig = EmailInvitesConfig()
+    links: InviteLinksConfig = InviteLinksConfig()
 
 
 @attr.s(frozen=True, auto_attribs=True)
