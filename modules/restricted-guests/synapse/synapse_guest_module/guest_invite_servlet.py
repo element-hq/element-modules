@@ -53,11 +53,15 @@ class GuestInviteServlet(DirectServeJsonResource):
         self._config = config
         self._mas_admin_client = mas_admin_client
         self._is_module_guest = is_module_guest
-        self._auth = api._hs.get_auth()
-        self._server_config = api._hs.config.server
+        self._block_non_admin_invites = api._hs.config.server.block_non_admin_invites
+        self._is_server_admin = api._hs.get_auth().is_server_admin
         callbacks = api._hs.get_module_api_callbacks()
-        self._spam_checker = callbacks.spam_checker
-        self._third_party_rules = callbacks.third_party_event_rules
+        self._user_may_send_3pid_invite = (
+            callbacks.spam_checker.user_may_send_3pid_invite
+        )
+        self._check_threepid_can_be_invited = (
+            callbacks.third_party_event_rules.check_threepid_can_be_invited
+        )
 
         # Per worker, and reset on restart
         per_hour = config.email_invites.per_inviter_per_hour
@@ -112,13 +116,13 @@ class GuestInviteServlet(DirectServeJsonResource):
         if refusal is not None:
             return refusal
 
-        # The checks on each address are Synapse's own, as it makes them for
-        # email invites
+        # The checks on each address are Synapse's own, as
+        # `RoomMemberHandler.do_3pid_invite` makes them
         for email in unique_emails.values():
-            if not await self._third_party_rules.check_threepid_can_be_invited(
+            if not await self._check_threepid_can_be_invited(
                 medium="email", address=email, room_id=room_id
             ) or (
-                await self._spam_checker.user_may_send_3pid_invite(
+                await self._user_may_send_3pid_invite(
                     inviter_userid=user_id,
                     medium="email",
                     address=email,
@@ -220,11 +224,8 @@ class GuestInviteServlet(DirectServeJsonResource):
         if self._is_module_guest(user_id):
             return {}, (403, {"msg": "Guests can't invite guests"})
 
-        # Synapse's own control, as it applies it to email invites
-        if (
-            self._server_config.block_non_admin_invites
-            and not await self._auth.is_server_admin(requester)
-        ):
+        # Synapse's own control, as `RoomMemberHandler.do_3pid_invite` applies it
+        if self._block_non_admin_invites and not await self._is_server_admin(requester):
             return {}, (403, {"msg": "Invites have been disabled on this server"})
 
         state = await self._api.get_room_state(

@@ -3,17 +3,19 @@
 # SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
 # Please see LICENSE files in the project root for full details.
 
+import inspect
 import io
 from typing import Any, Dict, List, Optional, Tuple, cast
 from unittest.mock import Mock
 
 import aiounittest
-from synapse.api.errors import Codes, HttpResponseException, LimitExceededError
+from synapse.api.errors import HttpResponseException, LimitExceededError
 from synapse.api.room_versions import RoomVersions
 from synapse.events import make_event_from_dict
 from synapse.http import RequestTimedOutError
 from synapse.http.site import SynapseRequest
 from synapse.module_api import NOT_SPAM, EventBase, StateMap
+from synapse.module_api.errors import Codes
 from twisted.web.test.requesthelper import DummyRequest
 
 from synapse_guest_module import GuestModule
@@ -108,6 +110,7 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
         self,
         config_override: Optional[Dict[str, Any]] = None,
         email_invites: Optional[Dict[str, Any]] = None,
+        block_non_admin_invites: bool = False,
     ) -> Tuple[GuestModule, Mock, SQLiteStore]:
         module, module_api, store = create_module(
             {
@@ -118,7 +121,8 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
                     **(email_invites or {}),
                 },
                 **(config_override or {}),
-            }
+            },
+            block_non_admin_invites=block_non_admin_invites,
         )
 
         requester = Mock()
@@ -130,7 +134,6 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
         module_api._hs.get_clock.return_value.time.return_value = 0.0
         datastore = module_api._hs.get_datastores.return_value.main
         datastore.get_ratelimit_for_user.return_value = make_awaitable(None)
-        module_api._hs.config.server.block_non_admin_invites = False
         module_api._hs.get_auth.return_value.is_server_admin.return_value = (
             make_awaitable(False)
         )
@@ -464,8 +467,16 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
         module_api.get_room_state.return_value = room_state(join_rule="invite")
         status, _ = await self.render(module, two_emails)
         self.assertEqual(status, 403)
-
         module_api.get_room_state.return_value = room_state()
+
+        spam_checker = module_api._hs.get_module_api_callbacks.return_value.spam_checker
+        spam_checker.user_may_send_3pid_invite.return_value = make_awaitable(
+            (Codes.FORBIDDEN, {})
+        )
+        status, _ = await self.render(module, two_emails)
+        self.assertEqual(status, 403)
+        spam_checker.user_may_send_3pid_invite.return_value = make_awaitable(NOT_SPAM)
+
         status, _ = await self.render(module, two_emails)
         self.assertEqual(status, 202)
 
@@ -559,8 +570,7 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
         self.assertEqual(status, 502)
 
     async def test_block_non_admin_invites(self) -> None:
-        module, module_api, _ = self.create_module()
-        module_api._hs.config.server.block_non_admin_invites = True
+        module, module_api, _ = self.create_module(block_non_admin_invites=True)
 
         status, response = await self.render(module)
 
@@ -569,8 +579,7 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
         module_api.http_client.post_json_get_json.assert_not_called()
 
     async def test_block_non_admin_invites_admin(self) -> None:
-        module, module_api, _ = self.create_module()
-        module_api._hs.config.server.block_non_admin_invites = True
+        module, module_api, _ = self.create_module(block_non_admin_invites=True)
         auth = module_api._hs.get_auth.return_value
         auth.is_server_admin.return_value = make_awaitable(True)
 
@@ -635,3 +644,46 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
             medium="email", address="bob@example.com", room_id=ROOM_ID
         )
         module_api.http_client.post_json_get_json.assert_not_called()
+
+    async def test_the_synapse_internals_still_exist_in_the_installed_synapse(
+        self,
+    ) -> None:
+        """Fails in CI when the installed Synapse moves the internals the servlet
+        calls."""
+        from synapse.api.auth.base import BaseAuth
+        from synapse.config.server import ServerConfig
+        from synapse.module_api.callbacks.spamchecker_callbacks import (
+            SpamCheckerModuleApiCallbacks,
+        )
+        from synapse.module_api.callbacks.third_party_event_rules_callbacks import (
+            ThirdPartyEventRulesModuleApiCallbacks,
+        )
+
+        for cls, name, params in (
+            (BaseAuth, "is_server_admin", {"requester"}),
+            (
+                SpamCheckerModuleApiCallbacks,
+                "user_may_send_3pid_invite",
+                {"inviter_userid", "medium", "address", "room_id"},
+            ),
+            (
+                ThirdPartyEventRulesModuleApiCallbacks,
+                "check_threepid_can_be_invited",
+                {"medium", "address", "room_id"},
+            ),
+        ):
+            method = getattr(cls, name)
+            self.assertTrue(
+                inspect.iscoroutinefunction(method), f"{cls.__name__}.{name}"
+            )
+            self.assertLessEqual(
+                params,
+                set(inspect.signature(method).parameters),
+                f"{cls.__name__}.{name}",
+            )
+
+        server_config = ServerConfig(Mock())
+        server_config.read_config(
+            {"server_name": "matrix.local"}, config_dir_path="", data_dir_path=""
+        )
+        self.assertIs(server_config.block_non_admin_invites, False)
