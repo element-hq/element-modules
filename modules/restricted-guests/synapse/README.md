@@ -249,6 +249,15 @@ list. The endpoint answers 400 for a missing or malformed
 of `/_synapse/client/invite_guests`, and 502 if MAS fails otherwise, can't be reached, or is too
 old to hold a link to `emails`.
 
+Without `emails`, MAS asks them only for a display name if its config allows it:
+
+```yaml
+account:
+    passwordless_registration_without_email_allowed: true
+```
+
+Otherwise MAS asks for an email address and sends a code to it.
+
 `PUT /_synapse/client/invite_guests/link/{id}` replaces the addresses allowed to use a
 link, with the `id` from its response. The body names the link's room and holds the whole
 new list, both checked as when making a link:
