@@ -137,8 +137,6 @@ class GuestInviteServlet(DirectServeJsonResource):
                 errcode, fields = spam_check
                 return 403, {**refused, "errcode": errcode, **fields}
 
-        # A minijinja template, which MAS renders when the guest registers
-        username = self._config.user_id_prefix + "{{ random }}"
         expires_at = datetime.fromtimestamp(
             self._api._hs.get_clock().time()
             + self._config.email_invites.invite_lifetime,
@@ -164,9 +162,9 @@ class GuestInviteServlet(DirectServeJsonResource):
                 # address sends no email at all
                 registration_tokens = [
                     await self._mas_admin_client.create_registration_token(
-                        username,
-                        self._room_url(room_id),
-                        token,
+                        username=self._username_template(),
+                        continue_url=self._room_url(room_id),
+                        token=token,
                         email=email,
                         usage_limit=1,
                         expires_at=expires_at,
@@ -200,6 +198,10 @@ class GuestInviteServlet(DirectServeJsonResource):
             return 502, {"msg": "Failed to send the invites"}
 
         return 202, {"scheduled": scheduled}
+
+    def _username_template(self) -> str:
+        """A minijinja template, which MAS renders when the guest registers."""
+        return self._config.user_id_prefix + "{{ random }}"
 
     def _room_url(self, room_id: str) -> str:
         """The URL MAS sends an invitee to for this room, once they're signed in.
@@ -318,9 +320,9 @@ class GuestInviteLinkServlet(GuestInviteServlet):
         try:
             token = await self._mas_admin_client.request_admin_token()
             registration_token = await self._mas_admin_client.create_registration_token(
-                self._config.user_id_prefix + "{{ random }}",
-                self._room_url(room_id),
-                token,
+                username=self._username_template(),
+                continue_url=self._room_url(room_id),
+                token=token,
             )
         # A timeout is a `SynapseError`, and a connection failure a Twisted error
         except Exception:
