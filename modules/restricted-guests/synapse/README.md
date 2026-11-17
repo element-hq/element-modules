@@ -83,6 +83,8 @@ API](https://element-hq.github.io/matrix-authentication-service/topics/admin-api
         - `lifetime` - how long an emailed invite stays valid, in seconds. Default: `604800` (7 days).
     - `links` - [sharing an invite link](#sharing-an-invite-link).
         - `enabled` - if true, the module serves `/_synapse/client/invite_guests/link`. Only enable it on a server with closed registration. Default: `false`.
+        - `allow_open` - if true, a link may list no addresses, so anyone who has it can sign up as a guest. Otherwise every link must list the addresses that may use it. Default: `false`.
+        - `max_emails` - the most addresses one link can list. It can't exceed 100, the most MAS takes. Default: `20`.
         - `per_inviter_per_hour` - how many links one user can make per hour, on average, refilling as for `email`. Default: `50`.
         - `lifetime` - how long a link stays valid, in seconds. Default: `604800` (7 days).
 
@@ -121,6 +123,8 @@ modules:
                   lifetime: 604800
               links:
                   enabled: false
+                  allow_open: false
+                  max_emails: 20
                   per_inviter_per_hour: 50
                   lifetime: 604800
 ```
@@ -244,9 +248,11 @@ refuses callers and rooms as `/_synapse/client/invite_guests` does, including
 
 `emails` is optional, and lists the only addresses allowed to use the link, such as a
 meeting's participants. They're checked as for `/_synapse/client/invite_guests`:
-deduplicated ignoring case, at most `email.max_emails`, and each put to the third-party rules
+deduplicated ignoring case, at most `links.max_emails`, and each put to the third-party rules
 and spam checker callbacks. No email is sent, so the request counts once however many
-addresses it lists. Without `emails`, or with `"emails": null`, anyone may use the link.
+addresses it lists. Without `emails`, or with `"emails": null`, anyone may use the link, so
+the endpoint makes one only with `links.allow_open`, and otherwise answers 403 with
+`"reason": "open_link_not_allowed"`.
 
 MAS mints an invite code with no usage limit, expiring after `links.lifetime`, and the
 response has its ID and link:

@@ -151,7 +151,7 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
                 "guest_invites": {
                     "client_room_url": "https://app.example.org/#/room/{room_id}",
                     "email": {"enabled": True, **(email or {})},
-                    "links": {"enabled": True, **(links or {})},
+                    "links": {"enabled": True, "allow_open": True, **(links or {})},
                 },
                 **(config_override or {}),
             },
@@ -457,6 +457,37 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
         [mint] = mas_calls(module_api, MINT_URI)
         self.assertEqual(mint["expires_at"], "1970-01-01T01:00:00+00:00")
 
+    async def test_open_invite_link_not_allowed(self) -> None:
+        module, module_api, _ = self.create_module(links={"allow_open": False})
+
+        for body in [
+            b'{"room_id":"!room:matrix.local"}',
+            b'{"room_id":"!room:matrix.local","emails":null}',
+        ]:
+            with self.subTest(body):
+                status, response = await self.render(module, body, link=True)
+
+                self.assertEqual(
+                    (status, response),
+                    (
+                        403,
+                        {
+                            "msg": "Invite links must list the addresses that may use "
+                            "them",
+                            "reason": "open_link_not_allowed",
+                        },
+                    ),
+                )
+        module_api.get_room_state.assert_not_called()
+        module_api.http_client.post_json_get_json.assert_not_called()
+
+        status, _ = await self.render(
+            module,
+            b'{"room_id":"!room:matrix.local","emails":["alice@example.com"]}',
+            link=True,
+        )
+        self.assertEqual(status, 200)
+
     async def test_invite_link_room_not_knockable(self) -> None:
         module, module_api, _ = self.create_module()
         module_api.get_room_state.return_value = room_state(join_rule="public")
@@ -471,7 +502,7 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
 
     async def test_invite_link_allowed_emails(self) -> None:
         module, module_api, _ = self.create_module(
-            email={"max_emails": 2}, links={"per_inviter_per_hour": 2}
+            links={"max_emails": 2, "per_inviter_per_hour": 2}
         )
 
         status, response = await self.render(
@@ -489,7 +520,7 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
         )
 
     async def test_invite_link_too_many_emails(self) -> None:
-        module, module_api, _ = self.create_module(email={"max_emails": 2})
+        module, module_api, _ = self.create_module(links={"max_emails": 2})
 
         status, response = await self.render(
             module,
@@ -579,7 +610,7 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
 
     async def test_invite_link_limit_counts_one(self) -> None:
         module, module_api, _ = self.create_module(
-            email={"max_emails": 2}, links={"per_inviter_per_hour": 2}
+            links={"max_emails": 2, "per_inviter_per_hour": 2}
         )
         two_emails = (
             b'{"room_id":"!room:matrix.local",'
@@ -1187,7 +1218,7 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
         module_api.http_client.get_json.assert_not_called()
 
     async def test_replace_link_malformed_emails(self) -> None:
-        module, module_api = self.create_link_module(email={"max_emails": 2})
+        module, module_api = self.create_link_module(links={"max_emails": 2})
 
         for emails in [
             b"",
@@ -1258,7 +1289,7 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
 
     async def test_link_limit_shared_with_replacing(self) -> None:
         module, module_api = self.create_link_module(
-            email={"max_emails": 1}, links={"per_inviter_per_hour": 1}
+            links={"max_emails": 1, "per_inviter_per_hour": 1}
         )
 
         status, _ = await self.render(
@@ -1272,7 +1303,7 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
 
     async def test_replace_link_refused_room_keeps_limit(self) -> None:
         module, module_api = self.create_link_module(
-            email={"max_emails": 1}, links={"per_inviter_per_hour": 1}
+            links={"max_emails": 1, "per_inviter_per_hour": 1}
         )
         module_api.get_room_state.return_value = room_state(power_levels={"invite": 50})
 
@@ -1285,8 +1316,7 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
 
     async def test_replace_link_unknown_spends_limit(self) -> None:
         module, module_api = self.create_link_module(
-            email={"max_emails": 1},
-            links={"per_inviter_per_hour": 1},
+            links={"max_emails": 1, "per_inviter_per_hour": 1},
             continue_url=None,
         )
 
@@ -1298,7 +1328,7 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
 
     async def test_link_address_refusal_spends_limit(self) -> None:
         module, module_api = self.create_link_module(
-            email={"max_emails": 1}, links={"per_inviter_per_hour": 2}
+            links={"max_emails": 1, "per_inviter_per_hour": 2}
         )
         spam_checker = module_api._hs.get_module_api_callbacks.return_value.spam_checker
         spam_checker.user_may_send_3pid_invite.return_value = make_awaitable(
@@ -1320,7 +1350,7 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
 
     async def test_replace_link_limit_counts_one(self) -> None:
         module, module_api = self.create_link_module(
-            email={"max_emails": 2}, links={"per_inviter_per_hour": 2}
+            links={"max_emails": 2, "per_inviter_per_hour": 2}
         )
         two_emails = (
             b'{"room_id":"!linked:matrix.local",'

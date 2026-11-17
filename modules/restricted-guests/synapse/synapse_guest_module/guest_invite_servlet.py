@@ -196,7 +196,7 @@ class GuestInviteServlet(DirectServeJsonResource):
         for email in emails:
             unique_emails.setdefault(email.strip().lower(), email.strip())
 
-        max_emails = self._config.guest_invites.email.max_emails
+        max_emails = self._kind_config().max_emails
         if len(unique_emails) > max_emails:
             return [], (
                 400,
@@ -371,6 +371,11 @@ class GuestInviteLinkServlet(GuestInviteServlet):
             emails, refusal = self._parse_emails(json_dict["emails"])
             if refusal is not None:
                 return refusal
+        elif not self._config.guest_invites.links.allow_open:
+            return 403, {
+                "msg": "Invite links must list the addresses that may use them",
+                "reason": "open_link_not_allowed",
+            }
 
         user_id = requester.user.to_string()
         _, refusal = await self._check_room(requester, room_id)
