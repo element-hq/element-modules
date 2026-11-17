@@ -104,13 +104,13 @@ class GuestInviteServlet(DirectServeJsonResource):
         if refusal is not None:
             return refusal
 
+        # After this module's own checks, so that a request they refuse doesn't spend
+        # the limit, and before the checks on each address
+        await self._ratelimiter.ratelimit(requester, n_actions=len(emails))
+
         refusal = await self._check_addresses(user_id, room_id, emails)
         if refusal is not None:
             return refusal
-
-        # After this module's own checks, so that a request it refuses doesn't spend
-        # the limit
-        await self._ratelimiter.ratelimit(requester, n_actions=len(emails))
 
         # A minijinja template, which MAS renders when the guest registers
         username = self._config.user_id_prefix + "{{ random }}"
@@ -214,21 +214,21 @@ class GuestInviteServlet(DirectServeJsonResource):
         addresses to the room.
 
         The checks are Synapse's own, as `RoomMemberHandler.do_3pid_invite` makes
-        them.
+        them. They call other modules, so callers spend the rate limit first, as
+        `do_3pid_invite` spends `rc_third_party_invite` before them.
         """
         for email in emails:
+            refused = {"msg": f"You can't invite {email} to this room"}
             if not await self._check_threepid_can_be_invited(
                 medium="email", address=email, room_id=room_id
-            ) or (
-                await self._user_may_send_3pid_invite(
-                    inviter_userid=user_id,
-                    medium="email",
-                    address=email,
-                    room_id=room_id,
-                )
-                != NOT_SPAM
             ):
-                return 403, {"msg": f"You can't invite {email} to this room"}
+                return 403, refused
+            spam_check = await self._user_may_send_3pid_invite(
+                inviter_userid=user_id, medium="email", address=email, room_id=room_id
+            )
+            if spam_check != NOT_SPAM:
+                errcode, fields = spam_check
+                return 403, {**refused, "errcode": errcode, **fields}
         return None
 
     async def _check_room(
@@ -360,13 +360,13 @@ class GuestInviteLinkServlet(GuestInviteServlet):
         if refusal is not None:
             return refusal
 
+        # One link, however many addresses may use it, because no email is sent
+        await self._ratelimiter.ratelimit(requester)
+
         if emails is not None:
             refusal = await self._check_addresses(user_id, room_id, emails)
             if refusal is not None:
                 return refusal
-
-        # One link, however many addresses may use it, because no email is sent
-        await self._ratelimiter.ratelimit(requester)
 
         logger.info("'%s' is creating a guest invite link to '%s'", user_id, room_id)
         token = await self._admin_token()
@@ -437,12 +437,12 @@ class GuestInviteLinkServlet(GuestInviteServlet):
         if refusal is not None:
             return refusal
 
+        # Before MAS is asked anything, so that a wrong link spends the limit too
+        await self._ratelimiter.ratelimit(requester)
+
         refusal = await self._check_addresses(user_id, room_id, emails)
         if refusal is not None:
             return refusal
-
-        # Before MAS is asked anything, so that a wrong link spends the limit too
-        await self._ratelimiter.ratelimit(requester)
 
         token = await self._admin_token()
         if token is None:

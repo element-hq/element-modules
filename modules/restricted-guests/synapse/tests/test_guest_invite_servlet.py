@@ -713,16 +713,28 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
         self.assertEqual(status, 403)
         module_api.get_room_state.return_value = room_state()
 
+        status, _ = await self.render(module, two_emails)
+        self.assertEqual(status, 202)
+
+    async def test_address_refusal_spends_limit(self) -> None:
+        module, module_api, _ = self.create_module(
+            email_invites={"max_emails": 2, "per_inviter_per_hour": 2}
+        )
+        two_emails = (
+            b'{"room_id":"!room:matrix.local",'
+            b'"emails":["a@example.com","b@example.com"]}'
+        )
         spam_checker = module_api._hs.get_module_api_callbacks.return_value.spam_checker
         spam_checker.user_may_send_3pid_invite.return_value = make_awaitable(
             (Codes.FORBIDDEN, {})
         )
-        status, _ = await self.render(module, two_emails)
-        self.assertEqual(status, 403)
-        spam_checker.user_may_send_3pid_invite.return_value = make_awaitable(NOT_SPAM)
 
         status, _ = await self.render(module, two_emails)
-        self.assertEqual(status, 202)
+        self.assertEqual(status, 403)
+
+        with self.assertRaises(LimitExceededError):
+            await self.render(module, two_emails)
+        spam_checker.user_may_send_3pid_invite.assert_called_once()
 
     async def test_mas_refuses_an_address(self) -> None:
         module, module_api, _ = self.create_module()
@@ -844,7 +856,7 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
             inviter_userid: str, medium: str, address: str, room_id: str
         ) -> Any:
             if address == "bob@example.com":
-                return Codes.FORBIDDEN, {}
+                return Codes.CONSENT_NOT_GIVEN, {"consent_uri": "https://example.org"}
             return NOT_SPAM
 
         spam_checker = module_api._hs.get_module_api_callbacks.return_value.spam_checker
@@ -856,7 +868,17 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
             b'"emails":["alice@example.com","bob@example.com"]}',
         )
 
-        self.assertEqual(status, 403)
+        self.assertEqual(
+            (status, response),
+            (
+                403,
+                {
+                    "msg": "You can't invite bob@example.com to this room",
+                    "errcode": Codes.CONSENT_NOT_GIVEN,
+                    "consent_uri": "https://example.org",
+                },
+            ),
+        )
         spam_checker.user_may_send_3pid_invite.assert_any_call(
             inviter_userid=INVITER,
             medium="email",
