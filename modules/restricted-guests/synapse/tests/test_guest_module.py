@@ -323,6 +323,18 @@ class GuestModuleConfigTest(aiounittest.AsyncTestCase):
                 }
             )
 
+    async def test_parse_config_fail_email_invites_max_emails_above_mas_limit(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(
+            ConfigError, "Config option 'email_invites.max_emails' can't exceed 100"
+        ):
+            GuestModule.parse_config(
+                {
+                    "email_invites": {"max_emails": 101, "per_inviter_per_hour": 200},
+                }
+            )
+
 
 @parameterized_class(
     ("variant", "config_override"),

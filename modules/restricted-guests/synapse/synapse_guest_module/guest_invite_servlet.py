@@ -14,14 +14,15 @@ from synapse.api.errors import HttpResponseException
 from synapse.api.ratelimiting import Ratelimiter
 from synapse.config.ratelimiting import RatelimitSettings
 from synapse.event_auth import get_named_level, get_user_power_level
-from synapse.http.site import SynapseRequest
 from synapse.module_api import (
     NOT_SPAM,
     DirectServeJsonResource,
     EventBase,
     ModuleApi,
     Requester,
+    RoomID,
     StateMap,
+    SynapseRequest,
     parse_json_object_from_request,
 )
 
@@ -87,7 +88,7 @@ class GuestInviteServlet(DirectServeJsonResource):
         json_dict = parse_json_object_from_request(request)
 
         room_id = json_dict.get("room_id")
-        if not isinstance(room_id, str) or not room_id.startswith("!"):
+        if not isinstance(room_id, str) or not RoomID.is_valid(room_id):
             return 400, {"msg": "You must provide a valid 'room_id'"}
 
         emails = json_dict.get("emails")
@@ -132,7 +133,8 @@ class GuestInviteServlet(DirectServeJsonResource):
             ):
                 return 403, {"msg": f"You can't invite {email} to this room"}
 
-        # Last, so that a refused request doesn't spend the limit
+        # After this module's own checks, so that a request it refuses doesn't spend
+        # the limit
         await self._ratelimiter.ratelimit(requester, n_actions=len(unique_emails))
 
         # A minijinja template, which MAS renders when the guest registers
@@ -183,10 +185,9 @@ class GuestInviteServlet(DirectServeJsonResource):
                 )
             except HttpResponseException as e:
                 if e.code == 400:
-                    return 400, {
-                        "msg": _first_error_title(e.response)
-                        or "MAS refused the invites"
-                    }
+                    msg = _first_error_title(e.response) or "MAS refused the invites"
+                    logger.info("MAS refused guest invites from '%s': %s", user_id, msg)
+                    return 400, {"msg": msg}
                 if e.code == 404:
                     logger.warning(
                         "MAS answered guest invites with 404: it's too old or isn't "

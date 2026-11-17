@@ -195,6 +195,15 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
 
         self.assertEqual(status, 400)
 
+    async def test_malformed_room_id(self) -> None:
+        module, _, _ = self.create_module()
+
+        status, response = await self.render(
+            module, b'{"room_id":"!not a room","emails":["alice@example.com"]}'
+        )
+
+        self.assertEqual(status, 400)
+
     async def test_missing_emails(self) -> None:
         module, _, _ = self.create_module()
 
@@ -513,7 +522,10 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
 
         module_api.http_client.post_json_get_json.side_effect = refuse_send
 
-        status, response = await self.render(module)
+        with self.assertLogs("synapse.contrib", "INFO") as logs:
+            status, response = await self.render(module)
+
+        self.assertIn("Token is revoked", logs.output[-1])
 
         self.assertEqual((status, response), (400, {"msg": "Token is revoked"}))
 
