@@ -15,6 +15,7 @@ from synapse.api.ratelimiting import Ratelimiter
 from synapse.config.ratelimiting import RatelimitSettings
 from synapse.event_auth import get_named_level, get_user_power_level
 from synapse.module_api import (
+    NOT_SPAM,
     DirectServeJsonResource,
     EventBase,
     ModuleApi,
@@ -52,6 +53,15 @@ class GuestInviteServlet(DirectServeJsonResource):
         self._config = config
         self._mas_admin_client = mas_admin_client
         self._is_module_guest = is_module_guest
+        self._block_non_admin_invites = api._hs.config.server.block_non_admin_invites
+        self._is_server_admin = api._hs.get_auth().is_server_admin
+        callbacks = api._hs.get_module_api_callbacks()
+        self._user_may_send_3pid_invite = (
+            callbacks.spam_checker.user_may_send_3pid_invite
+        )
+        self._check_threepid_can_be_invited = (
+            callbacks.third_party_event_rules.check_threepid_can_be_invited
+        )
 
         # Per worker, and reset on restart
         per_hour = config.guest_invites.email.per_inviter_per_hour
@@ -105,6 +115,11 @@ class GuestInviteServlet(DirectServeJsonResource):
         if self._is_module_guest(user_id):
             return 403, {"msg": "Guests can't invite guests"}
 
+        # This and the checks on each address below are Synapse's own, as
+        # `RoomMemberHandler.do_3pid_invite` makes them
+        if self._block_non_admin_invites and not await self._is_server_admin(requester):
+            return 403, {"msg": "Invites have been disabled on this server"}
+
         state = await self._api.get_room_state(
             room_id,
             [
@@ -132,9 +147,23 @@ class GuestInviteServlet(DirectServeJsonResource):
         if room_id in self._config.rooms_forbidden_to_guests:
             return 403, {"msg": "Guests are forbidden from this room"}
 
-        # After this module's own checks, so that a request it refuses doesn't spend
-        # the limit
+        # After this module's own checks, so that a request they refuse doesn't spend
+        # the limit, and before the checks on each address, which call other modules,
+        # as `do_3pid_invite` spends `rc_third_party_invite` before them
         await self._ratelimiter.ratelimit(requester, n_actions=len(unique_emails))
+
+        for email in unique_emails.values():
+            refused = {"msg": f"You can't invite {email} to this room"}
+            if not await self._check_threepid_can_be_invited(
+                medium="email", address=email, room_id=room_id
+            ):
+                return 403, refused
+            spam_check = await self._user_may_send_3pid_invite(
+                inviter_userid=user_id, medium="email", address=email, room_id=room_id
+            )
+            if spam_check != NOT_SPAM:
+                errcode, fields = spam_check
+                return 403, {**refused, "errcode": errcode, **fields}
 
         # A minijinja template, which MAS renders when the guest registers
         username = self._config.user_id_prefix + "{{ random }}"
