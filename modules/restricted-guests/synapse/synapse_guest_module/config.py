@@ -37,6 +37,10 @@ class EmailInvitesConfig:
 @attr.s(frozen=True, auto_attribs=True)
 class InviteLinksConfig:
     enabled: bool = False
+    # Whether a link may list no addresses, letting anyone with it sign up
+    allow_open: bool = False
+    # MAS's limit on a token's allowed addresses
+    max_emails: int = 100
     per_inviter_per_hour: int = 50
     # In seconds
     lifetime: int = 7 * 24 * 60 * 60

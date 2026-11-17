@@ -83,6 +83,8 @@ API](https://element-hq.github.io/matrix-authentication-service/topics/admin-api
         - `lifetime` - how long an emailed invite stays valid, in seconds. Default: `604800` (7 days).
     - `links` - [sharing an invite link](#sharing-an-invite-link).
         - `enabled` - if true, the module serves `/_synapse/client/invite_guests/link`. Only enable it on a server with closed registration. Default: `false`.
+        - `allow_open` - if true, a link may list no addresses, so anyone who has it can sign up as a guest. Otherwise every link must list the addresses that may use it. Default: `false`.
+        - `max_emails` - the most addresses one link can list. It can't exceed 100, the most MAS takes. Default: `100`.
         - `per_inviter_per_hour` - how many links one user can make per hour, on average, refilling as for `email`. Default: `50`.
         - `lifetime` - how long a link stays valid, in seconds. Default: `604800` (7 days).
 
@@ -121,6 +123,8 @@ modules:
                   lifetime: 604800
               links:
                   enabled: false
+                  allow_open: false
+                  max_emails: 100
                   per_inviter_per_hour: 50
                   lifetime: 604800
 ```
@@ -236,24 +240,43 @@ refuses callers and rooms as `/_synapse/client/invite_guests` does, including
 `block_non_admin_invites`. Each request counts once against `links.per_inviter_per_hour`.
 
 ```json
-{ "room_id": "!room:example.org" }
+{
+    "room_id": "!room:example.org",
+    "emails": ["alice@example.com", "bob@example.com"]
+}
 ```
 
-MAS mints an invite code with no address and no usage limit, expiring after
-`links.lifetime`, and the response has its link:
+`emails` is optional, and lists the only addresses allowed to use the link, such as a
+meeting's participants. They're checked as for `/_synapse/client/invite_guests`:
+deduplicated ignoring case, at most `links.max_emails`, and each put to the third-party rules
+and spam checker callbacks. No email is sent, so the request counts once however many
+addresses it lists. Without `emails`, or with `"emails": null`, anyone may use the link, so
+the endpoint makes one only with `links.allow_open`, and otherwise answers 403 with
+`"reason": "open_link_not_allowed"`.
+
+MAS mints an invite code with no usage limit, expiring after `links.lifetime`, and the
+response has its ID and link:
 
 ```json
-{ "invite_url": "https://auth.example.org/register?token=…" }
+{
+    "id": "01JABCDEFGHJKMNPQRSTVWXYZ0",
+    "invite_url": "https://auth.example.org/register?token=…"
+}
 ```
 
 Anyone who follows the link signs up as a guest, with a localpart starting with
-`user_id_prefix`. However many people use it, knocking still decides who gets into the
-room. The module can't end a link before it expires; revoking its invite code with
-MAS's admin API does. The endpoint answers 400 for a missing or malformed `room_id`, the 403 of
-`/_synapse/client/invite_guests`, 429 over `links.per_inviter_per_hour`, and 502 if MAS
-fails or can't be reached.
+`user_id_prefix`. With `emails`, MAS only lets them sign up with a verified address on the
+list. However many people use it, knocking still decides who gets into the room. The
+module can't end a link before it expires; revoking its invite code with MAS's admin
+API does.
 
-MAS asks them only for a display name if its config allows it:
+The endpoint answers 400 for a missing or malformed `room_id` or `emails`, or with MAS's
+message in `msg` if MAS refuses the request, the 403 of `/_synapse/client/invite_guests`,
+429 over `links.per_inviter_per_hour`, and 502 if MAS fails otherwise, can't be reached,
+or is too old to hold a link to `emails`, in which case the module revokes the open link
+MAS minted instead.
+
+Without `emails`, MAS asks them only for a display name if its config allows it:
 
 ```yaml
 account:
@@ -261,6 +284,39 @@ account:
 ```
 
 Otherwise MAS asks for an email address and sends a code to it.
+
+`PUT /_synapse/client/invite_guests/link/{id}` replaces the addresses allowed to use a
+link, with the `id` from its response. The body names the link's room and holds the whole
+new list, both checked as when making a link:
+
+```json
+{
+    "room_id": "!room:example.org",
+    "emails": ["alice@example.com", "carol@example.com"]
+}
+```
+
+Anyone who may make a link to the link's room may replace its list, not only the caller who
+made it. Neither the module nor MAS records which room a link is for, so the caller names
+it, and the module checks that the link leads where a link to that room would, with
+the current `client_room_url`. So after `client_room_url` changes, a link made before
+can't be edited until it expires; the caller can make a new link instead.
+
+Each request counts once against `links.per_inviter_per_hour`, with the links the caller
+makes, once the caller and the room have passed and before the addresses are checked or
+the module asks MAS about the link. The response is the same as when making a link.
+
+Taking an address off the list doesn't remove anyone from the room. A guest who signed up
+with it keeps their account and stays joined, and a request to join stays until a member
+denies it. The list only stops sign-ups through the link from then on, so removing
+someone is an ordinary kick.
+
+The endpoint answers 404 for an ID that isn't a ULID or that MAS doesn't know, or for an
+invite code that isn't a link to `room_id`, has no `emails`, or has expired or been
+revoked. Editing a link doesn't change when it expires. It answers 400 for a missing or
+malformed `room_id` or `emails`, or with MAS's message in `msg` if MAS refuses the list,
+the 403 of `/_synapse/client/invite_guests`, 429 over `links.per_inviter_per_hour`, and
+502 if MAS fails otherwise or can't be reached.
 
 ## Production installation
 

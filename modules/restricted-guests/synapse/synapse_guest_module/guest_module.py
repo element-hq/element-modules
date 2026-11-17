@@ -269,8 +269,25 @@ class GuestModule:
             guest_invites_config,
             "links",
             mas,
-            {"per_inviter_per_hour": 50, "lifetime": 7 * 24 * 60 * 60},
+            {
+                "max_emails": 100,
+                "per_inviter_per_hour": 50,
+                "lifetime": 7 * 24 * 60 * 60,
+            },
         )
+
+        # MAS refuses a token with more allowed addresses
+        if links["max_emails"] > 100:
+            raise ConfigError(
+                "Config option 'guest_invites.links.max_emails' can't exceed 100"
+            )
+
+        # Checked to be an object above
+        allow_open = (guest_invites_config.get("links") or {}).get("allow_open", False)
+        if not isinstance(allow_open, bool):
+            raise ConfigError(
+                "Config option 'guest_invites.links.allow_open' must be a bool"
+            )
 
         client_room_url = guest_invites_config.get("client_room_url")
         # MAS refuses anything else when an invite is minted
@@ -298,7 +315,7 @@ class GuestModule:
             guest_invites=GuestInvitesConfig(
                 client_room_url,
                 EmailInvitesConfig(email_enabled, **email),
-                InviteLinksConfig(links_enabled, **links),
+                InviteLinksConfig(links_enabled, allow_open, **links),
             ),
         )
 

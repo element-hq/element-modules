@@ -195,6 +195,8 @@ class GuestModuleConfigTest(aiounittest.AsyncTestCase):
                     },
                     "links": {
                         "enabled": True,
+                        "allow_open": True,
+                        "max_emails": 4,
                         "per_inviter_per_hour": 3,
                         "lifetime": 60,
                     },
@@ -214,6 +216,8 @@ class GuestModuleConfigTest(aiounittest.AsyncTestCase):
                 ),
                 links=InviteLinksConfig(
                     enabled=True,
+                    allow_open=True,
+                    max_emails=4,
                     per_inviter_per_hour=3,
                     lifetime=60,
                 ),
@@ -286,6 +290,14 @@ class GuestModuleConfigTest(aiounittest.AsyncTestCase):
                 {"per_inviter_per_hour": 0},
                 "Config option 'guest_invites.links.per_inviter_per_hour' must be a "
                 "positive integer",
+            ),
+            (
+                {"allow_open": "yes"},
+                "Config option 'guest_invites.links.allow_open' must be a bool",
+            ),
+            (
+                {"max_emails": 101},
+                "Config option 'guest_invites.links.max_emails' can't exceed 100",
             ),
             (
                 {"lifetime": "60"},
