@@ -161,6 +161,22 @@ class MasAdminClient:
         )
         return _registration_token(response)
 
+    async def revoke_registration_token(self, token_id: str, token: str) -> None:
+        """Has MAS revoke an invite code, so nobody can register with it.
+
+        Args:
+            token_id: The invite code's ID.
+            token: An admin access token from `request_admin_token`.
+
+        Raises:
+            HttpResponseException: On a non-2xx HTTP response.
+        """
+        await self._api.http_client.post_json_get_json(
+            uri=self._build_registration_token_url(token_id) + "/revoke",
+            post_json={},
+            headers={"Authorization": [f"Bearer {token}"]},
+        )
+
     async def set_allowed_emails(
         self, token_id: str, allowed_emails: list[str], token: str
     ) -> RegistrationToken:

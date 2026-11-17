@@ -31,6 +31,9 @@ ROOM_ID = "!room:matrix.local"
 INVITER = "@inviter:matrix.local"
 CREATOR = "@creator:matrix.local"
 MINT_URI = "https://mas.example.org/api/admin/v1/user-registration-tokens"
+REVOKE_URI = (
+    "https://mas.example.org/api/admin/v1/user-registration-tokens/token-link/revoke"
+)
 SEND_URI = "https://mas.example.org/api/admin/v1/user-registration-tokens/invite-emails"
 LINK_ID = "01JABCDEFGHJKMNPQRSTVWXYZ0"
 LINK_URI = f"{MINT_URI}/{LINK_ID}"
@@ -531,7 +534,7 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
 
         self.assertEqual(
             (status, response),
-            (400, {"msg": "You can invite at most 2 emails at once"}),
+            (400, {"msg": "A link can list at most 2 addresses"}),
         )
         module_api.http_client.post_json_get_json.assert_not_called()
 
@@ -689,24 +692,32 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
         self.assertEqual(status, 502)
 
     async def test_invite_link_mas_ignores_allowed_emails(self) -> None:
-        module, module_api, _ = self.create_module()
+        for revoke_fails in [False, True]:
+            with self.subTest(revoke_fails=revoke_fails):
+                module, module_api, _ = self.create_module()
 
-        def ignore_allowed_emails(
-            uri: str, post_json: Dict[str, Any], **kwargs: Any
-        ) -> Any:
-            return mas_response(uri, {**post_json, "allowed_emails": None})
+                def old_mas(uri: str, post_json: Dict[str, Any], **kwargs: Any) -> Any:
+                    if uri == REVOKE_URI:
+                        if revoke_fails:
+                            raise HttpResponseException(500, "Error", b"")
+                        return {}
+                    return mas_response(uri, {**post_json, "allowed_emails": None})
 
-        module_api.http_client.post_json_get_json.side_effect = ignore_allowed_emails
+                module_api.http_client.post_json_get_json.side_effect = old_mas
 
-        with self.assertLogs("synapse.contrib", "WARNING"):
-            status, response = await self.render(
-                module,
-                b'{"room_id":"!room:matrix.local","emails":["alice@example.com"]}',
-                link=True,
-            )
+                with self.assertLogs(
+                    "synapse.contrib", "ERROR" if revoke_fails else "WARNING"
+                ):
+                    status, response = await self.render(
+                        module,
+                        b'{"room_id":"!room:matrix.local",'
+                        b'"emails":["alice@example.com"]}',
+                        link=True,
+                    )
 
-        self.assertEqual(status, 502)
-        self.assertNotIn("invite_url", response)
+                self.assertEqual(status, 502)
+                self.assertNotIn("invite_url", response)
+                self.assertEqual(mas_calls(module_api, REVOKE_URI), [{}])
 
     async def test_invite_lifetime(self) -> None:
         module, module_api, _ = self.create_module(email={"lifetime": 3600})
@@ -1251,7 +1262,7 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
 
         self.assertEqual(
             (status, response),
-            (400, {"msg": "You can invite at most 2 emails at once"}),
+            (400, {"msg": "A link can list at most 2 addresses"}),
         )
         module_api.http_client.get_json.assert_not_called()
 

@@ -270,7 +270,7 @@ class GuestModule:
             "links",
             mas,
             {
-                "max_emails": 20,
+                "max_emails": 100,
                 "per_inviter_per_hour": 50,
                 "lifetime": 7 * 24 * 60 * 60,
             },

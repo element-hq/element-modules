@@ -51,6 +51,7 @@ class GuestInviteServlet(DirectServeJsonResource):
     """
 
     _ratelimiter_key = "guest_module_invite_guests"
+    _too_many_emails = "You can invite at most {} emails at once"
 
     def __init__(
         self,
@@ -200,7 +201,7 @@ class GuestInviteServlet(DirectServeJsonResource):
         if len(unique_emails) > max_emails:
             return [], (
                 400,
-                {"msg": f"You can invite at most {max_emails} emails at once"},
+                {"msg": self._too_many_emails.format(max_emails)},
             )
 
         return list(unique_emails.values()), None
@@ -348,6 +349,7 @@ class GuestInviteLinkServlet(GuestInviteServlet):
     isLeaf = True
 
     _ratelimiter_key = "guest_module_invite_guest_links"
+    _too_many_emails = "A link can list at most {} addresses"
 
     def _kind_config(self) -> Union[EmailInvitesConfig, InviteLinksConfig]:
         return self._config.guest_invites.links
@@ -405,12 +407,24 @@ class GuestInviteLinkServlet(GuestInviteServlet):
         except Exception as e:
             return _mas_failure(e, "Failed to create the invite link")
 
+        # A MAS too old to know `allowed_emails` ignores them, minting an open link
         if emails is not None and registration_token.allowed_emails is None:
-            logger.warning(
-                "MAS minted guest invite link '%s' without its allowed addresses: it's "
-                "too old to limit who uses a link. Revoke it with MAS's admin API.",
-                registration_token.id,
-            )
+            try:
+                await self._mas_admin_client.revoke_registration_token(
+                    registration_token.id, token
+                )
+            except Exception:
+                logger.exception(
+                    "MAS minted guest invite link '%s' without its allowed addresses, "
+                    "and refused to revoke it. Revoke it with MAS's admin API.",
+                    registration_token.id,
+                )
+            else:
+                logger.warning(
+                    "MAS minted guest invite link '%s' without its allowed addresses, "
+                    "so it was revoked: MAS is too old to limit who uses a link.",
+                    registration_token.id,
+                )
             return 502, {"msg": "Failed to create the invite link"}
 
         return 200, {
