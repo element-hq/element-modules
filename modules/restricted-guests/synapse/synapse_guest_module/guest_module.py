@@ -10,7 +10,9 @@
 
 import asyncio
 import logging
+import re
 from typing import Any, Dict, Literal, Optional, Tuple, Union
+from urllib.parse import urlsplit
 
 from synapse.module_api import (
     NOT_SPAM,
@@ -24,7 +26,13 @@ from synapse.module_api import (
 from synapse.module_api.errors import ConfigError
 from synapse.types import UserID
 
-from synapse_guest_module.config import GuestModuleConfig, MasConfig
+from synapse_guest_module.config import (
+    EmailInvitesConfig,
+    GuestInvitesConfig,
+    GuestModuleConfig,
+    MasConfig,
+)
+from synapse_guest_module.guest_invite_servlet import GuestInviteServlet
 from synapse_guest_module.guest_registration_servlet import GuestRegistrationServlet
 from synapse_guest_module.guest_user_reaper import GuestUserReaper
 from synapse_guest_module.mas_admin_client import MasAdminClient
@@ -58,6 +66,15 @@ class GuestModule:
         self._api.register_web_resource(
             "/_synapse/client/register_guest", self.registration_servlet
         )
+
+        self.invite_servlet: Optional[GuestInviteServlet] = None
+        if config.guest_invites.email.enabled and mas_admin_client is not None:
+            self.invite_servlet = GuestInviteServlet(
+                config, api, mas_admin_client, self._is_module_guest
+            )
+            self._api.register_web_resource(
+                "/_synapse/client/invite_guests", self.invite_servlet
+            )
         self._api.register_third_party_rules_callbacks(
             on_profile_update=self.profile_update
         )
@@ -205,6 +222,69 @@ class GuestModule:
                 client_secret_filepath,
             )
 
+        guest_invites_config = config.get("guest_invites")
+        if guest_invites_config is None:
+            guest_invites_config = {}
+        if not isinstance(guest_invites_config, dict):
+            raise ConfigError("Config option 'guest_invites' must be an object")
+
+        email_config = guest_invites_config.get("email")
+        if email_config is None:
+            email_config = {}
+        if not isinstance(email_config, dict):
+            raise ConfigError("Config option 'guest_invites.email' must be an object")
+
+        email_enabled = email_config.get("enabled", False)
+        if not isinstance(email_enabled, bool):
+            raise ConfigError(
+                "Config option 'guest_invites.email.enabled' must be a bool"
+            )
+
+        if email_enabled and mas is None:
+            raise ConfigError("Config option 'guest_invites.email' requires 'mas'")
+
+        max_emails = email_config.get("max_emails", 20)
+        per_inviter_per_hour = email_config.get("per_inviter_per_hour", 50)
+        lifetime = email_config.get("lifetime", 7 * 24 * 60 * 60)
+        for name, value in (
+            ("max_emails", max_emails),
+            ("per_inviter_per_hour", per_inviter_per_hour),
+            ("lifetime", lifetime),
+        ):
+            if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+                raise ConfigError(
+                    f"Config option 'guest_invites.email.{name}' must be a positive "
+                    "integer"
+                )
+
+        # MAS refuses to email more invites at once
+        if max_emails > 100:
+            raise ConfigError(
+                "Config option 'guest_invites.email.max_emails' can't exceed 100"
+            )
+
+        # A request for more emails than the hourly limit could never pass it
+        if max_emails > per_inviter_per_hour:
+            raise ConfigError(
+                "Config option 'guest_invites.email.max_emails' can't exceed "
+                "'guest_invites.email.per_inviter_per_hour'"
+            )
+
+        client_room_url = guest_invites_config.get("client_room_url")
+        # MAS refuses anything else when an invite is minted
+        if (email_enabled or client_room_url is not None) and (
+            not isinstance(client_room_url, str)
+            or not re.fullmatch(r"https?://[!-~]+", client_room_url)
+            or "{room_id}" not in client_room_url
+            or not urlsplit(client_room_url).netloc
+            or "{" in urlsplit(client_room_url).netloc
+        ):
+            raise ConfigError(
+                "Config option 'guest_invites.client_room_url' is required when a "
+                "kind of guest invite is enabled, and must be an http or https URL in "
+                f"visible ASCII with '{{room_id}}' after its host: {client_room_url!r}"
+            )
+
         return GuestModuleConfig(
             user_id_prefix,
             display_name_suffix,
@@ -213,6 +293,12 @@ class GuestModule:
             mas,
             hide_room_directory_from_guests,
             frozenset(rooms_forbidden_to_guests),
+            guest_invites=GuestInvitesConfig(
+                client_room_url,
+                EmailInvitesConfig(
+                    email_enabled, max_emails, per_inviter_per_hour, lifetime
+                ),
+            ),
         )
 
     async def profile_update(
