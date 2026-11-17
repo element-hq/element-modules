@@ -54,7 +54,7 @@ class GuestInviteServlet(DirectServeJsonResource):
         self._is_module_guest = is_module_guest
 
         # Per worker, and reset on restart
-        per_hour = config.email_invites.per_inviter_per_hour
+        per_hour = config.guest_invites.email.per_inviter_per_hour
         self._ratelimiter = Ratelimiter(
             store=api._hs.get_datastores().main,
             clock=api._hs.get_clock(),
@@ -97,7 +97,7 @@ class GuestInviteServlet(DirectServeJsonResource):
         for email in emails:
             unique_emails.setdefault(email.strip().lower(), email.strip())
 
-        max_emails = self._config.email_invites.max_emails
+        max_emails = self._config.guest_invites.email.max_emails
         if len(unique_emails) > max_emails:
             return 400, {"msg": f"You can invite at most {max_emails} emails at once"}
 
@@ -140,7 +140,7 @@ class GuestInviteServlet(DirectServeJsonResource):
         username = self._config.user_id_prefix + "{{ random }}"
         expires_at = datetime.fromtimestamp(
             self._api._hs.get_clock().time()
-            + self._config.email_invites.invite_lifetime,
+            + self._config.guest_invites.email.lifetime,
             tz=timezone.utc,
         )
 
@@ -197,8 +197,8 @@ class GuestInviteServlet(DirectServeJsonResource):
         to find the room, have to be part of `client_room_url`.
         """
         # Checked when the config was parsed
-        assert self._config.email_invites.client_room_url is not None
-        return self._config.email_invites.client_room_url.replace(
+        assert self._config.guest_invites.client_room_url is not None
+        return self._config.guest_invites.client_room_url.replace(
             "{room_id}", quote(room_id, safe="")
         )
 
