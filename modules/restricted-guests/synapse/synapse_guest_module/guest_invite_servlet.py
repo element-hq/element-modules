@@ -42,6 +42,8 @@ class GuestInviteServlet(DirectServeJsonResource):
     recipient follows their link, and MAS assigns the guest's localpart then.
     """
 
+    _ratelimiter_key = "guest_module_invite_guests"
+
     def __init__(
         self,
         config: GuestModuleConfig,
@@ -70,7 +72,7 @@ class GuestInviteServlet(DirectServeJsonResource):
             store=api._hs.get_datastores().main,
             clock=api._hs.get_clock(),
             cfg=RatelimitSettings(
-                key="guest_module_invite_guests",
+                key=self._ratelimiter_key,
                 per_second=per_hour / 3600,
                 burst_count=per_hour,
             ),
@@ -298,6 +300,8 @@ class GuestInviteLinkServlet(GuestInviteServlet):
     `invite_lifetime`. Nothing exists on this homeserver until someone follows the
     link, and MAS assigns each guest's localpart then.
     """
+
+    _ratelimiter_key = "guest_module_invite_guest_links"
 
     async def _async_render_POST(
         self, request: SynapseRequest
