@@ -75,10 +75,10 @@ API](https://element-hq.github.io/matrix-authentication-service/topics/admin-api
     - `client_secret_filepath` - path to a plaintext file containing the client secret. If set, this is used instead of `client_secret`.
 
 - `email_invites` - optional configuration for [inviting guests by email](#inviting-guests-by-email). Requires `mas`.
-    - `enabled` - if true, the module serves `/_synapse/client/invite_guests`. Only enable it on a server with closed registration. Default: `false`.
+    - `enabled` - if true, the module serves `/_synapse/client/invite_guests` and [`/_synapse/client/invite_guests/link`](#sharing-an-invite-link). Only enable it on a server with closed registration. Default: `false`.
     - `max_emails` - the most addresses one request can invite, or list on a link. It can't exceed `per_inviter_per_hour`, or 100, the most MAS takes at once. Default: `20`.
-    - `per_inviter_per_hour` - how many addresses one user can invite per hour, on average. Up to this many can go at once, and the allowance then refills over the next hour, so one hour can see nearly twice this many. Each worker counts separately, and the count resets when Synapse restarts. Default: `50`.
-    - `invite_lifetime` - how long an invite link stays valid, in seconds. Default: `604800` (7 days).
+    - `per_inviter_per_hour` - how many addresses one user can invite per hour, on average, and separately how many invite links they can make. Up to this many can go at once, and the allowance then refills over the next hour, so one hour can see nearly twice this many. Each worker counts separately, and the count resets when Synapse restarts. Default: `50`.
+    - `invite_lifetime` - how long an emailed invite or a shared invite link stays valid, in seconds. Default: `604800` (7 days).
     - `client_room_url` - where invitees are sent once they have signed up or signed in, with `{room_id}` standing for the percent-encoded room ID, such as `https://app.example.org/#/room/{room_id}`. It must be an `http` or `https` URL. Required with `enabled`. See [where invite links lead](#where-invite-links-lead).
 
 Example configuration:
@@ -238,7 +238,8 @@ deduplicated ignoring case, at most `max_emails`, and each put to the third-part
 and spam checker callbacks. No email is sent, so the request counts once however many
 addresses it lists. Without `emails`, or with `"emails": null`, anyone may use the link.
 
-MAS mints an invite code with no usage limit, and the response has its ID and link:
+MAS mints an invite code with no usage limit, expiring after `invite_lifetime`, and the
+response has its ID and link:
 
 ```json
 {
@@ -249,7 +250,9 @@ MAS mints an invite code with no usage limit, and the response has its ID and li
 
 Anyone who follows the link signs up as a guest, with a localpart starting with
 `user_id_prefix`. With `emails`, MAS only lets them sign up with a verified address on the
-list. The endpoint answers 400 for a missing or malformed
+list. However many people use it, knocking still decides who gets into the room. The
+module can't end a link before it expires; revoking its invite code with MAS's admin
+API does. The endpoint answers 400 for a missing or malformed
 `room_id` or `emails`, or with MAS's message in `msg` if MAS refuses the request, the 403 and 429
 of `/_synapse/client/invite_guests`, and 502 if MAS fails otherwise, can't be reached, or is too
 old to hold a link to `emails`.

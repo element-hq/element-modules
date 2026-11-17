@@ -391,8 +391,29 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
                 "username": "visitor-{{ random }}",
                 "passwordless": True,
                 "continue_url": "https://app.example.org/#/room/%21room%3Amatrix.local",
+                "expires_at": "1970-01-08T00:00:00+00:00",
             },
         )
+
+    async def test_invite_link_limit(self) -> None:
+        module, _, _ = self.create_module(
+            email_invites={"max_emails": 1, "per_inviter_per_hour": 1}
+        )
+        link = b'{"room_id":"!room:matrix.local"}'
+
+        status, _ = await self.render(module, link, link=True)
+        self.assertEqual(status, 200)
+
+        with self.assertRaises(LimitExceededError) as cm:
+            await self.render(module, link, link=True)
+        self.assertEqual(cm.exception.limiter_name, "guest_module_invite_guest_links")
+
+        # Email invites have a limit of their own
+        status, _ = await self.render(module)
+        self.assertEqual(status, 202)
+        with self.assertRaises(LimitExceededError) as cm:
+            await self.render(module)
+        self.assertEqual(cm.exception.limiter_name, "guest_module_invite_guests")
 
     async def test_invite_link_room_not_knockable(self) -> None:
         module, module_api, _ = self.create_module()

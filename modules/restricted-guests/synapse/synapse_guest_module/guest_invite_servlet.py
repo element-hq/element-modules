@@ -46,6 +46,8 @@ class GuestInviteServlet(DirectServeJsonResource):
     recipient follows their link, and MAS assigns the guest's localpart then.
     """
 
+    _ratelimiter_key = "guest_module_invite_guests"
+
     def __init__(
         self,
         config: GuestModuleConfig,
@@ -74,7 +76,7 @@ class GuestInviteServlet(DirectServeJsonResource):
             store=api._hs.get_datastores().main,
             clock=api._hs.get_clock(),
             cfg=RatelimitSettings(
-                key="guest_module_invite_guests",
+                key=self._ratelimiter_key,
                 per_second=per_hour / 3600,
                 burst_count=per_hour,
             ),
@@ -112,14 +114,6 @@ class GuestInviteServlet(DirectServeJsonResource):
         if refusal is not None:
             return refusal
 
-        # A minijinja template, which MAS renders when the guest registers
-        username = self._config.user_id_prefix + "{{ random }}"
-        expires_at = datetime.fromtimestamp(
-            self._api._hs.get_clock().time()
-            + self._config.email_invites.invite_lifetime,
-            tz=timezone.utc,
-        )
-
         logger.info(
             "'%s' is inviting %d guest(s) to '%s'", user_id, len(emails), room_id
         )
@@ -139,12 +133,12 @@ class GuestInviteServlet(DirectServeJsonResource):
                 # address sends no email at all
                 registration_tokens = [
                     await self._mas_admin_client.create_registration_token(
-                        username,
-                        self._room_url(room_id),
-                        token,
+                        username=self._username_template(),
+                        continue_url=self._room_url(room_id),
+                        token=token,
                         email=email,
                         usage_limit=1,
-                        expires_at=expires_at,
+                        expires_at=self._expires_at(),
                     )
                     for email in emails
                 ]
@@ -280,6 +274,17 @@ class GuestInviteServlet(DirectServeJsonResource):
 
         return state, None
 
+    def _expires_at(self) -> datetime:
+        return datetime.fromtimestamp(
+            self._api._hs.get_clock().time()
+            + self._config.email_invites.invite_lifetime,
+            tz=timezone.utc,
+        )
+
+    def _username_template(self) -> str:
+        """A minijinja template, which MAS renders when the guest registers."""
+        return self._config.user_id_prefix + "{{ random }}"
+
     def _room_url(self, room_id: str) -> str:
         """The URL MAS sends an invitee to for this room, once they're signed in.
 
@@ -327,13 +332,16 @@ class GuestInviteLinkServlet(GuestInviteServlet):
     `PUT /_synapse/client/invite_guests/link/{id}` replaces a link's `emails`, and
     requires the link's `room_id` too.
 
-    MAS mints an invite code with no usage limit, which only the `emails` can
-    use if they're given, and anyone otherwise. Nothing exists on this homeserver
-    until someone follows the link, and MAS assigns each guest's localpart then.
+    MAS mints an invite code with no usage limit, expiring after `invite_lifetime`,
+    which only the `emails` can use if they're given, and anyone otherwise. Nothing
+    exists on this homeserver until someone follows the link, and MAS assigns each
+    guest's localpart then.
     """
 
     # Also serves the paths below it, which name a link
     isLeaf = True
+
+    _ratelimiter_key = "guest_module_invite_guest_links"
 
     async def _async_render_POST(
         self, request: SynapseRequest
@@ -374,9 +382,10 @@ class GuestInviteLinkServlet(GuestInviteServlet):
             return 502, {"msg": "Failed to create the invite link"}
         try:
             registration_token = await self._mas_admin_client.create_registration_token(
-                self._config.user_id_prefix + "{{ random }}",
-                self._room_url(room_id),
-                token,
+                username=self._username_template(),
+                continue_url=self._room_url(room_id),
+                token=token,
+                expires_at=self._expires_at(),
                 allowed_emails=emails,
             )
         except Exception as e:

@@ -99,6 +99,7 @@ class MasAdminClient:
 
     async def create_registration_token(
         self,
+        *,
         username: str,
         continue_url: str,
         token: str,
