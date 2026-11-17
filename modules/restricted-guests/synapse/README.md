@@ -189,7 +189,7 @@ Three of Synapse's own controls on email invites apply here too, and refuse with
   request is refused.
 
 Synapse's `rc_third_party_invite` rate limit doesn't apply: `per_inviter_per_hour` is
-the limit instead.
+the limit instead. Nor do shadow bans, which Synapse doesn't apply under MAS.
 
 The user reaper doesn't deactivate guests who signed up from an invite email, it
 only knows about the guests `register_guest` creates. They can be manually deactivated
