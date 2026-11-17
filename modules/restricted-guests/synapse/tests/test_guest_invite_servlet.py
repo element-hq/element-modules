@@ -369,6 +369,16 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
         self.assertEqual(response["reason"], "room_not_knockable")
         module_api.http_client.post_json_get_json.assert_not_called()
 
+    async def test_invite_link_malformed_room_id(self) -> None:
+        module, module_api, _ = self.create_module()
+
+        status, response = await self.render(
+            module, b'{"room_id":"!not a room"}', link=True
+        )
+
+        self.assertEqual(status, 400)
+        module_api.http_client.post_json_get_json.assert_not_called()
+
     async def test_invite_link_mas_error(self) -> None:
         module, module_api, _ = self.create_module()
         module_api.http_client.post_json_get_json.side_effect = HttpResponseException(

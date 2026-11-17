@@ -304,7 +304,7 @@ class GuestInviteLinkServlet(GuestInviteServlet):
         json_dict = parse_json_object_from_request(request)
 
         room_id = json_dict.get("room_id")
-        if not isinstance(room_id, str) or not room_id.startswith("!"):
+        if not isinstance(room_id, str) or not RoomID.is_valid(room_id):
             return 400, {"msg": "You must provide a valid 'room_id'"}
 
         _, refusal = await self._check_room(requester, room_id)
