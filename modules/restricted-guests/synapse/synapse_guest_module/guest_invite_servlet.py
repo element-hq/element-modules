@@ -6,7 +6,7 @@
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple, Union
 from urllib.parse import quote
 
 from synapse.api.constants import EventContentFields, EventTypes, JoinRules, Membership
@@ -19,13 +19,18 @@ from synapse.module_api import (
     DirectServeJsonResource,
     EventBase,
     ModuleApi,
+    Requester,
     RoomID,
     StateMap,
     SynapseRequest,
     parse_json_object_from_request,
 )
 
-from synapse_guest_module.config import GuestModuleConfig
+from synapse_guest_module.config import (
+    EmailInvitesConfig,
+    GuestModuleConfig,
+    InviteLinksConfig,
+)
 from synapse_guest_module.mas_admin_client import MasAdminClient
 
 logger = logging.getLogger("synapse.contrib." + __name__)
@@ -40,6 +45,8 @@ class GuestInviteServlet(DirectServeJsonResource):
     invite code for and sends out. Nothing exists on this homeserver until a
     recipient follows their link, and MAS assigns the guest's localpart then.
     """
+
+    _ratelimiter_key = "guest_module_invite_guests"
 
     def __init__(
         self,
@@ -64,12 +71,12 @@ class GuestInviteServlet(DirectServeJsonResource):
         )
 
         # Per worker, and reset on restart
-        per_hour = config.guest_invites.email.per_inviter_per_hour
+        per_hour = self._kind_config().per_inviter_per_hour
         self._ratelimiter = Ratelimiter(
             store=api._hs.get_datastores().main,
             clock=api._hs.get_clock(),
             cfg=RatelimitSettings(
-                key="guest_module_invite_guests",
+                key=self._ratelimiter_key,
                 per_second=per_hour / 3600,
                 burst_count=per_hour,
             ),
@@ -112,46 +119,17 @@ class GuestInviteServlet(DirectServeJsonResource):
             return 400, {"msg": f"You can invite at most {max_emails} emails at once"}
 
         user_id = requester.user.to_string()
-        if self._is_module_guest(user_id):
-            return 403, {"msg": "Guests can't invite guests"}
-
-        # This and the checks on each address below are Synapse's own, as
-        # `RoomMemberHandler.do_3pid_invite` makes them
-        if self._block_non_admin_invites and not await self._is_server_admin(requester):
-            return 403, {"msg": "Invites have been disabled on this server"}
-
-        state = await self._api.get_room_state(
-            room_id,
-            [
-                (EventTypes.Create, ""),
-                (EventTypes.JoinRules, ""),
-                (EventTypes.Member, user_id),
-                (EventTypes.Name, ""),
-                (EventTypes.PowerLevels, ""),
-            ],
-        )
-        if not self._may_invite(user_id, state):
-            return 403, {"msg": "You are not allowed to invite users to this room"}
-
-        # An email-invited guest has no Matrix invite, so it gets in by asking to join
-        join_rules = state.get((EventTypes.JoinRules, ""))
-        if join_rules is None or join_rules.content.get("join_rule") not in (
-            JoinRules.KNOCK,
-            JoinRules.KNOCK_RESTRICTED,
-        ):
-            return 403, {
-                "msg": "Guests can only be invited to rooms they can ask to join",
-                "reason": "room_not_knockable",
-            }
-
-        if room_id in self._config.rooms_forbidden_to_guests:
-            return 403, {"msg": "Guests are forbidden from this room"}
+        state, refusal = await self._check_room(requester, room_id)
+        if refusal is not None:
+            return refusal
 
         # After this module's own checks, so that a request they refuse doesn't spend
         # the limit, and before the checks on each address, which call other modules,
         # as `do_3pid_invite` spends `rc_third_party_invite` before them
         await self._ratelimiter.ratelimit(requester, n_actions=len(unique_emails))
 
+        # The checks on each address are Synapse's own, as
+        # `RoomMemberHandler.do_3pid_invite` makes them
         for email in unique_emails.values():
             refused = {"msg": f"You can't invite {email} to this room"}
             if not await self._check_threepid_can_be_invited(
@@ -164,14 +142,6 @@ class GuestInviteServlet(DirectServeJsonResource):
             if spam_check != NOT_SPAM:
                 errcode, fields = spam_check
                 return 403, {**refused, "errcode": errcode, **fields}
-
-        # A minijinja template, which MAS renders when the guest registers
-        username = self._config.user_id_prefix + "{{ random }}"
-        expires_at = datetime.fromtimestamp(
-            self._api._hs.get_clock().time()
-            + self._config.guest_invites.email.lifetime,
-            tz=timezone.utc,
-        )
 
         logger.info(
             "'%s' is inviting %d guest(s) to '%s'", user_id, len(unique_emails), room_id
@@ -190,14 +160,26 @@ class GuestInviteServlet(DirectServeJsonResource):
             try:
                 # Every address is minted for before any is sent, so a refused
                 # address sends no email at all
-                token_ids = [
+                registration_tokens = [
                     await self._mas_admin_client.create_registration_token(
-                        email, username, self._room_url(room_id), expires_at, token
+                        username=self._username_template(),
+                        continue_url=self._room_url(room_id),
+                        token=token,
+                        email=email,
+                        usage_limit=1,
+                        expires_at=self._expires_at(),
                     )
                     for email in unique_emails.values()
                 ]
                 scheduled = await self._mas_admin_client.send_invite_emails(
-                    token_ids, room_name, user_id, inviter_name, token
+                    [
+                        registration_token.id
+                        for registration_token in registration_tokens
+                    ],
+                    room_name,
+                    user_id,
+                    inviter_name,
+                    token,
                 )
             except HttpResponseException as e:
                 if e.code == 400:
@@ -217,6 +199,19 @@ class GuestInviteServlet(DirectServeJsonResource):
 
         return 202, {"scheduled": scheduled}
 
+    def _kind_config(self) -> Union[EmailInvitesConfig, InviteLinksConfig]:
+        return self._config.guest_invites.email
+
+    def _expires_at(self) -> datetime:
+        return datetime.fromtimestamp(
+            self._api._hs.get_clock().time() + self._kind_config().lifetime,
+            tz=timezone.utc,
+        )
+
+    def _username_template(self) -> str:
+        """A minijinja template, which MAS renders when the guest registers."""
+        return self._config.user_id_prefix + "{{ random }}"
+
     def _room_url(self, room_id: str) -> str:
         """The URL MAS sends an invitee to for this room, once they're signed in.
 
@@ -230,6 +225,55 @@ class GuestInviteServlet(DirectServeJsonResource):
         return self._config.guest_invites.client_room_url.replace(
             "{room_id}", quote(room_id, safe="")
         )
+
+    async def _check_room(
+        self, requester: Requester, room_id: str
+    ) -> Tuple[StateMap[EventBase], Optional[Tuple[int, Dict[str, Any]]]]:
+        """The room's state, and the response refusing the request if the
+        requester may not invite guests to the room.
+        """
+        user_id = requester.user.to_string()
+        if self._is_module_guest(user_id):
+            return {}, (403, {"msg": "Guests can't invite guests"})
+
+        # Synapse's own control, as `RoomMemberHandler.do_3pid_invite` applies it
+        if self._block_non_admin_invites and not await self._is_server_admin(requester):
+            return {}, (403, {"msg": "Invites have been disabled on this server"})
+
+        state = await self._api.get_room_state(
+            room_id,
+            [
+                (EventTypes.Create, ""),
+                (EventTypes.JoinRules, ""),
+                (EventTypes.Member, user_id),
+                (EventTypes.Name, ""),
+                (EventTypes.PowerLevels, ""),
+            ],
+        )
+        if not self._may_invite(user_id, state):
+            return state, (
+                403,
+                {"msg": "You are not allowed to invite users to this room"},
+            )
+
+        # An invited guest has no Matrix invite, so it gets in by asking to join
+        join_rules = state.get((EventTypes.JoinRules, ""))
+        if join_rules is None or join_rules.content.get("join_rule") not in (
+            JoinRules.KNOCK,
+            JoinRules.KNOCK_RESTRICTED,
+        ):
+            return state, (
+                403,
+                {
+                    "msg": "Guests can only be invited to rooms they can ask to join",
+                    "reason": "room_not_knockable",
+                },
+            )
+
+        if room_id in self._config.rooms_forbidden_to_guests:
+            return state, (403, {"msg": "Guests are forbidden from this room"})
+
+        return state, None
 
     @staticmethod
     def _may_invite(user_id: str, state: StateMap[EventBase]) -> bool:
@@ -251,6 +295,56 @@ class GuestInviteServlet(DirectServeJsonResource):
         return get_user_power_level(user_id, state) >= get_named_level(
             state, "invite", 0
         )
+
+
+class GuestInviteLinkServlet(GuestInviteServlet):
+    """The `POST /_synapse/client/invite_guests/link` endpoint makes a link
+    inviting guests to a room, for the caller to share. It requires the
+    `room_id` property.
+
+    MAS mints an invite code with no address and no usage limit, expiring after
+    `links.lifetime`. Nothing exists on this homeserver until someone follows the
+    link, and MAS assigns each guest's localpart then.
+    """
+
+    _ratelimiter_key = "guest_module_invite_guest_links"
+
+    def _kind_config(self) -> Union[EmailInvitesConfig, InviteLinksConfig]:
+        return self._config.guest_invites.links
+
+    async def _async_render_POST(
+        self, request: SynapseRequest
+    ) -> Tuple[int, Dict[str, Any]]:
+        requester = await self._api.get_user_by_req(request)
+
+        json_dict = parse_json_object_from_request(request)
+
+        room_id = json_dict.get("room_id")
+        if not isinstance(room_id, str) or not RoomID.is_valid(room_id):
+            return 400, {"msg": "You must provide a valid 'room_id'"}
+
+        _, refusal = await self._check_room(requester, room_id)
+        if refusal is not None:
+            return refusal
+
+        await self._ratelimiter.ratelimit(requester)
+
+        user_id = requester.user.to_string()
+        logger.info("'%s' is creating a guest invite link to '%s'", user_id, room_id)
+        try:
+            token = await self._mas_admin_client.request_admin_token()
+            registration_token = await self._mas_admin_client.create_registration_token(
+                username=self._username_template(),
+                continue_url=self._room_url(room_id),
+                token=token,
+                expires_at=self._expires_at(),
+            )
+        # A timeout is a `SynapseError`, and a connection failure a Twisted error
+        except Exception:
+            logger.exception("Failed to create a guest invite link in MAS")
+            return 502, {"msg": "Failed to create the invite link"}
+
+        return 200, {"invite_url": registration_token.invite_url}
 
 
 def _non_empty_string(event: Optional[EventBase], key: str) -> Optional[str]:

@@ -30,9 +30,13 @@ from synapse_guest_module.config import (
     EmailInvitesConfig,
     GuestInvitesConfig,
     GuestModuleConfig,
+    InviteLinksConfig,
     MasConfig,
 )
-from synapse_guest_module.guest_invite_servlet import GuestInviteServlet
+from synapse_guest_module.guest_invite_servlet import (
+    GuestInviteLinkServlet,
+    GuestInviteServlet,
+)
 from synapse_guest_module.guest_registration_servlet import GuestRegistrationServlet
 from synapse_guest_module.guest_user_reaper import GuestUserReaper
 from synapse_guest_module.mas_admin_client import MasAdminClient
@@ -68,12 +72,20 @@ class GuestModule:
         )
 
         self.invite_servlet: Optional[GuestInviteServlet] = None
+        self.invite_link_servlet: Optional[GuestInviteLinkServlet] = None
         if config.guest_invites.email.enabled and mas_admin_client is not None:
             self.invite_servlet = GuestInviteServlet(
                 config, api, mas_admin_client, self._is_module_guest
             )
             self._api.register_web_resource(
                 "/_synapse/client/invite_guests", self.invite_servlet
+            )
+        if config.guest_invites.links.enabled and mas_admin_client is not None:
+            self.invite_link_servlet = GuestInviteLinkServlet(
+                config, api, mas_admin_client, self._is_module_guest
+            )
+            self._api.register_web_resource(
+                "/_synapse/client/invite_guests/link", self.invite_link_servlet
             )
         self._api.register_third_party_rules_callbacks(
             on_profile_update=self.profile_update
@@ -228,34 +240,17 @@ class GuestModule:
         if not isinstance(guest_invites_config, dict):
             raise ConfigError("Config option 'guest_invites' must be an object")
 
-        email_config = guest_invites_config.get("email")
-        if email_config is None:
-            email_config = {}
-        if not isinstance(email_config, dict):
-            raise ConfigError("Config option 'guest_invites.email' must be an object")
-
-        email_enabled = email_config.get("enabled", False)
-        if not isinstance(email_enabled, bool):
-            raise ConfigError(
-                "Config option 'guest_invites.email.enabled' must be a bool"
-            )
-
-        if email_enabled and mas is None:
-            raise ConfigError("Config option 'guest_invites.email' requires 'mas'")
-
-        max_emails = email_config.get("max_emails", 20)
-        per_inviter_per_hour = email_config.get("per_inviter_per_hour", 50)
-        lifetime = email_config.get("lifetime", 7 * 24 * 60 * 60)
-        for name, value in (
-            ("max_emails", max_emails),
-            ("per_inviter_per_hour", per_inviter_per_hour),
-            ("lifetime", lifetime),
-        ):
-            if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
-                raise ConfigError(
-                    f"Config option 'guest_invites.email.{name}' must be a positive "
-                    "integer"
-                )
+        email_enabled, email = _parse_invite_kind(
+            guest_invites_config,
+            "email",
+            mas,
+            {
+                "max_emails": 20,
+                "per_inviter_per_hour": 50,
+                "lifetime": 7 * 24 * 60 * 60,
+            },
+        )
+        max_emails = email["max_emails"]
 
         # MAS refuses to email more invites at once
         if max_emails > 100:
@@ -264,15 +259,22 @@ class GuestModule:
             )
 
         # A request for more emails than the hourly limit could never pass it
-        if max_emails > per_inviter_per_hour:
+        if max_emails > email["per_inviter_per_hour"]:
             raise ConfigError(
                 "Config option 'guest_invites.email.max_emails' can't exceed "
                 "'guest_invites.email.per_inviter_per_hour'"
             )
 
+        links_enabled, links = _parse_invite_kind(
+            guest_invites_config,
+            "links",
+            mas,
+            {"per_inviter_per_hour": 50, "lifetime": 7 * 24 * 60 * 60},
+        )
+
         client_room_url = guest_invites_config.get("client_room_url")
         # MAS refuses anything else when an invite is minted
-        if (email_enabled or client_room_url is not None) and (
+        if (email_enabled or links_enabled or client_room_url is not None) and (
             not isinstance(client_room_url, str)
             or not re.fullmatch(r"https?://[!-~]+", client_room_url)
             or "{room_id}" not in client_room_url
@@ -295,9 +297,8 @@ class GuestModule:
             frozenset(rooms_forbidden_to_guests),
             guest_invites=GuestInvitesConfig(
                 client_room_url,
-                EmailInvitesConfig(
-                    email_enabled, max_emails, per_inviter_per_hour, lifetime
-                ),
+                EmailInvitesConfig(email_enabled, **email),
+                InviteLinksConfig(links_enabled, **links),
             ),
         )
 
@@ -448,3 +449,38 @@ class GuestModule:
             return True
 
         return self._is_module_guest(user_profile["user_id"])
+
+
+def _parse_invite_kind(
+    guest_invites_config: Dict[str, Any],
+    kind: str,
+    mas: Optional[MasConfig],
+    defaults: Dict[str, int],
+) -> Tuple[bool, Dict[str, int]]:
+    """Whether this kind of guest invite is enabled, and its positive integer
+    options, defaulting to these.
+    """
+    kind_config = guest_invites_config.get(kind)
+    if kind_config is None:
+        kind_config = {}
+    if not isinstance(kind_config, dict):
+        raise ConfigError(f"Config option 'guest_invites.{kind}' must be an object")
+
+    enabled = kind_config.get("enabled", False)
+    if not isinstance(enabled, bool):
+        raise ConfigError(
+            f"Config option 'guest_invites.{kind}.enabled' must be a bool"
+        )
+    if enabled and mas is None:
+        raise ConfigError(f"Config option 'guest_invites.{kind}' requires 'mas'")
+
+    values = {}
+    for name, default in defaults.items():
+        value = kind_config.get(name, default)
+        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+            raise ConfigError(
+                f"Config option 'guest_invites.{kind}.{name}' must be a positive "
+                "integer"
+            )
+        values[name] = value
+    return enabled, values

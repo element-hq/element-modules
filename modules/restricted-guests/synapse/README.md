@@ -81,6 +81,10 @@ API](https://element-hq.github.io/matrix-authentication-service/topics/admin-api
         - `max_emails` - the most addresses one request can invite. It can't exceed `per_inviter_per_hour`, or 100, the most MAS emails at once. Default: `20`.
         - `per_inviter_per_hour` - how many addresses one user can invite per hour, on average. Up to this many can go at once, and the allowance then refills over the next hour, so one hour can see nearly twice this many. Each worker counts separately, and the count resets when Synapse restarts. Default: `50`.
         - `lifetime` - how long an emailed invite stays valid, in seconds. Default: `604800` (7 days).
+    - `links` - [sharing an invite link](#sharing-an-invite-link).
+        - `enabled` - if true, the module serves `/_synapse/client/invite_guests/link`. Only enable it on a server with closed registration. Default: `false`.
+        - `per_inviter_per_hour` - how many links one user can make per hour, on average, refilling as for `email`. Default: `50`.
+        - `lifetime` - how long a link stays valid, in seconds. Default: `604800` (7 days).
 
 Example configuration:
 
@@ -113,6 +117,10 @@ modules:
               email:
                   enabled: true
                   max_emails: 20
+                  per_inviter_per_hour: 50
+                  lifetime: 604800
+              links:
+                  enabled: false
                   per_inviter_per_hour: 50
                   lifetime: 604800
 ```
@@ -219,6 +227,40 @@ Two things limit that today:
   version 12 on. Guests are on this homeserver, so they don't need any. For a URL that
   other homeservers' users may open, put this server's name in the configured URL
   itself, such as `https://matrix.to/#/{room_id}?via=example.org`.
+
+## Sharing an invite link
+
+`POST /_synapse/client/invite_guests/link` makes a link inviting guests to ask to join a
+room, for the caller to share. It's served when `guest_invites.links.enabled` is set, and
+refuses callers and rooms as `/_synapse/client/invite_guests` does, including
+`block_non_admin_invites`. Each request counts once against `links.per_inviter_per_hour`.
+
+```json
+{ "room_id": "!room:example.org" }
+```
+
+MAS mints an invite code with no address and no usage limit, expiring after
+`links.lifetime`, and the response has its link:
+
+```json
+{ "invite_url": "https://auth.example.org/register?token=…" }
+```
+
+Anyone who follows the link signs up as a guest, with a localpart starting with
+`user_id_prefix`. However many people use it, knocking still decides who gets into the
+room. The module can't end a link before it expires; revoking its invite code with
+MAS's admin API does. The endpoint answers 400 for a missing or malformed `room_id`, the 403 of
+`/_synapse/client/invite_guests`, 429 over `links.per_inviter_per_hour`, and 502 if MAS
+fails or can't be reached.
+
+MAS asks them only for a display name if its config allows it:
+
+```yaml
+account:
+    passwordless_registration_without_email_allowed: true
+```
+
+Otherwise MAS asks for an email address and sends a code to it.
 
 ## Production installation
 

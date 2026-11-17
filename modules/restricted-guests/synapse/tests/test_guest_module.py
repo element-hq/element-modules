@@ -21,6 +21,7 @@ from synapse_guest_module.config import (
     EmailInvitesConfig,
     GuestInvitesConfig,
     GuestModuleConfig,
+    InviteLinksConfig,
     MasConfig,
 )
 from synapse_guest_module.guest_module import GuestModule
@@ -192,6 +193,11 @@ class GuestModuleConfigTest(aiounittest.AsyncTestCase):
                         "per_inviter_per_hour": 10,
                         "lifetime": 3600,
                     },
+                    "links": {
+                        "enabled": True,
+                        "per_inviter_per_hour": 3,
+                        "lifetime": 60,
+                    },
                 },
             }
         )
@@ -205,6 +211,11 @@ class GuestModuleConfigTest(aiounittest.AsyncTestCase):
                     max_emails=5,
                     per_inviter_per_hour=10,
                     lifetime=3600,
+                ),
+                links=InviteLinksConfig(
+                    enabled=True,
+                    per_inviter_per_hour=3,
+                    lifetime=60,
                 ),
             ),
         )
@@ -221,6 +232,7 @@ class GuestModuleConfigTest(aiounittest.AsyncTestCase):
         )
 
         self.assertEqual(config.guest_invites.email.lifetime, 604800)
+        self.assertEqual(config.guest_invites.links, InviteLinksConfig())
 
     async def test_parse_config_fail_guest_invites_email_without_mas(self) -> None:
         with self.assertRaisesRegex(
@@ -261,6 +273,41 @@ class GuestModuleConfigTest(aiounittest.AsyncTestCase):
                         },
                     }
                 )
+
+    async def test_parse_config_fail_guest_invites_links(self) -> None:
+        for links, message in [
+            ("yes", "Config option 'guest_invites.links' must be an object"),
+            (
+                {"enabled": 1},
+                "Config option 'guest_invites.links.enabled' must be a bool",
+            ),
+            ({"enabled": True}, "Config option 'guest_invites.links' requires 'mas'"),
+            (
+                {"per_inviter_per_hour": 0},
+                "Config option 'guest_invites.links.per_inviter_per_hour' must be a "
+                "positive integer",
+            ),
+            (
+                {"lifetime": "60"},
+                "Config option 'guest_invites.links.lifetime' must be a positive "
+                "integer",
+            ),
+        ]:
+            with self.subTest(links), self.assertRaisesRegex(ConfigError, message):
+                GuestModule.parse_config({"guest_invites": {"links": links}})
+
+    async def test_parse_config_fail_guest_invites_links_client_room_url(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(
+            ConfigError, "Config option 'guest_invites.client_room_url' is required"
+        ):
+            GuestModule.parse_config(
+                {
+                    **mas_config_override(),
+                    "guest_invites": {"links": {"enabled": True}},
+                }
+            )
 
     async def test_parse_config_fail_guest_invites_email_enabled(self) -> None:
         with self.assertRaisesRegex(
