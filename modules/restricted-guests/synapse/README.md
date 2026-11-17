@@ -76,7 +76,7 @@ API](https://element-hq.github.io/matrix-authentication-service/topics/admin-api
 
 - `email_invites` - optional configuration for [inviting guests by email](#inviting-guests-by-email). Requires `mas`.
     - `enabled` - if true, the module serves `/_synapse/client/invite_guests`. Only enable it on a server with closed registration. Default: `false`.
-    - `max_emails` - the most addresses one request can invite. It can't exceed `per_inviter_per_hour`. Default: `20`.
+    - `max_emails` - the most addresses one request can invite. It can't exceed `per_inviter_per_hour`, or 100, the most MAS emails at once. Default: `20`.
     - `per_inviter_per_hour` - how many addresses one user can invite per hour, on average. Up to this many can go at once, and the allowance then refills over the next hour, so one hour can see nearly twice this many. Each worker counts separately, and the count resets when Synapse restarts. Default: `50`.
     - `invite_lifetime` - how long an invite link stays valid, in seconds. Default: `604800` (7 days).
     - `client_room_url` - where invitees are sent once they have signed up or signed in, with `{room_id}` standing for the percent-encoded room ID, such as `https://app.example.org/#/room/{room_id}`. It must be an `http` or `https` URL. Required with `enabled`. See [where invite links lead](#where-invite-links-lead).
@@ -143,6 +143,8 @@ join a room as guests. It's served when `email_invites.enabled` is set, and need
 `mas` configuration above. The module mints an invite code per address with
 `POST /api/admin/v1/user-registration-tokens`, then has MAS email them with
 `POST /api/admin/v1/user-registration-tokens/invite-emails`. MAS registers the guests.
+No MAS release serves the second endpoint yet: it's added by
+[element-hq/matrix-authentication-service#6026](https://github.com/element-hq/matrix-authentication-service/pull/6026).
 
 ```json
 {
@@ -160,7 +162,8 @@ and `per_inviter_per_hour`.
 Each address gets a single-use invite code of its own, pinned to that address and
 expiring after `invite_lifetime`, which MAS emails a link for, naming the room and the
 caller. Every code is minted before any email is sent, so an address MAS refuses sends
-no email at all. The links are not in the response:
+no email at all. The response is a `202` with the number of emails MAS scheduled. The
+links are not in it:
 
 ```json
 { "scheduled": 2 }
