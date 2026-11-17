@@ -1230,6 +1230,28 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
         with self.assertRaises(LimitExceededError):
             await self.render_put(module)
 
+    async def test_link_address_refusal_spends_limit(self) -> None:
+        module, module_api = self.create_link_module(
+            email_invites={"max_emails": 1, "per_inviter_per_hour": 2}
+        )
+        spam_checker = module_api._hs.get_module_api_callbacks.return_value.spam_checker
+        spam_checker.user_may_send_3pid_invite.return_value = make_awaitable(
+            (Codes.FORBIDDEN, {})
+        )
+
+        status, _ = await self.render(
+            module,
+            b'{"room_id":"!room:matrix.local","emails":["bob@example.com"]}',
+            link=True,
+        )
+        self.assertEqual(status, 403)
+        status, _ = await self.render_put(module)
+        self.assertEqual(status, 403)
+
+        with self.assertRaises(LimitExceededError):
+            await self.render_put(module)
+        self.assertEqual(spam_checker.user_may_send_3pid_invite.call_count, 2)
+
     async def test_replace_link_limit_counts_one(self) -> None:
         module, module_api = self.create_link_module(
             email_invites={"max_emails": 2, "per_inviter_per_hour": 2}
