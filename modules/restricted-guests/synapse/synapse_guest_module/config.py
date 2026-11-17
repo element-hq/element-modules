@@ -29,7 +29,8 @@ class EmailInvitesConfig:
     # the server's name
     max_emails: int = 20
     per_inviter_per_hour: int = 50
-    # In seconds
+    # In seconds. A week leaves time to act on the email without links lasting
+    # indefinitely.
     invite_lifetime: int = 7 * 24 * 60 * 60
     # The URL invitees are sent to once signed in, with `{room_id}` standing for the
     # percent-encoded room ID. Required with `enabled`.

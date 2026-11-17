@@ -253,6 +253,12 @@ class GuestModule:
                     f"Config option 'email_invites.{name}' must be a positive integer"
                 )
 
+        # MAS refuses to email more invites at once
+        if max_emails > 100:
+            raise ConfigError(
+                "Config option 'email_invites.max_emails' can't exceed 100"
+            )
+
         # A request for more emails than the hourly limit could never pass it
         if max_emails > per_inviter_per_hour:
             raise ConfigError(
