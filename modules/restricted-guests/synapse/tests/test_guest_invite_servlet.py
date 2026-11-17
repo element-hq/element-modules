@@ -1088,6 +1088,7 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
         for body in [
             b'{"emails":["bob@example.com"]}',
             b'{"room_id":"#linked:matrix.local","emails":["bob@example.com"]}',
+            b'{"room_id":"!not a room","emails":["bob@example.com"]}',
         ]:
             with self.subTest(body):
                 status, response = await self.render_put(module, body)
