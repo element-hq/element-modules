@@ -147,23 +147,23 @@ class GuestInviteServlet(DirectServeJsonResource):
         if room_id in self._config.rooms_forbidden_to_guests:
             return 403, {"msg": "Guests are forbidden from this room"}
 
+        # After this module's own checks, so that a request they refuse doesn't spend
+        # the limit, and before the checks on each address, which call other modules,
+        # as `do_3pid_invite` spends `rc_third_party_invite` before them
+        await self._ratelimiter.ratelimit(requester, n_actions=len(unique_emails))
+
         for email in unique_emails.values():
+            refused = {"msg": f"You can't invite {email} to this room"}
             if not await self._check_threepid_can_be_invited(
                 medium="email", address=email, room_id=room_id
-            ) or (
-                await self._user_may_send_3pid_invite(
-                    inviter_userid=user_id,
-                    medium="email",
-                    address=email,
-                    room_id=room_id,
-                )
-                != NOT_SPAM
             ):
-                return 403, {"msg": f"You can't invite {email} to this room"}
-
-        # After this module's own checks, so that a request it refuses doesn't spend
-        # the limit
-        await self._ratelimiter.ratelimit(requester, n_actions=len(unique_emails))
+                return 403, refused
+            spam_check = await self._user_may_send_3pid_invite(
+                inviter_userid=user_id, medium="email", address=email, room_id=room_id
+            )
+            if spam_check != NOT_SPAM:
+                errcode, fields = spam_check
+                return 403, {**refused, "errcode": errcode, **fields}
 
         # A minijinja template, which MAS renders when the guest registers
         username = self._config.user_id_prefix + "{{ random }}"

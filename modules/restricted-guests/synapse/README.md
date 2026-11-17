@@ -189,10 +189,12 @@ Three of Synapse's own controls on email invites apply here too, and refuse with
   as with Synapse's own invites.
 - A third-party rules module's `check_threepid_can_be_invited` and a spam checker's
   `user_may_send_3pid_invite` run for each address. If either refuses one, the whole
-  request is refused.
+  request is refused. A spam checker's errcode and extra fields are in the body, as
+  Synapse returns them.
 
 Synapse's `rc_third_party_invite` rate limit doesn't apply: `per_inviter_per_hour` is
-the limit instead. Nor do shadow bans, which Synapse doesn't apply under MAS.
+the limit instead. As with Synapse's, it's spent before these checks on each address,
+so a request they refuse still counts against it. Nor do shadow bans, which Synapse doesn't apply under MAS.
 
 The user reaper doesn't deactivate guests who signed up from an invite email, it
 only knows about the guests `register_guest` creates. They can be manually deactivated
