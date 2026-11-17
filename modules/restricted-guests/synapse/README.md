@@ -74,12 +74,17 @@ API](https://element-hq.github.io/matrix-authentication-service/topics/admin-api
     - `client_secret` - client secret for the automated tool. Ideally long and cryptographically secure. Keep it a secret!
     - `client_secret_filepath` - path to a plaintext file containing the client secret. If set, this is used instead of `client_secret`.
 
-- `email_invites` - optional configuration for [inviting guests by email](#inviting-guests-by-email). Requires `mas`.
-    - `enabled` - if true, the module serves `/_synapse/client/invite_guests` and [`/_synapse/client/invite_guests/link`](#sharing-an-invite-link). Only enable it on a server with closed registration. Default: `false`.
-    - `max_emails` - the most addresses one request can invite, or list on a link. It can't exceed `per_inviter_per_hour`, or 100, the most MAS takes at once. Default: `20`.
-    - `per_inviter_per_hour` - how many addresses one user can invite per hour, on average, and separately how many invite links they can make. Up to this many can go at once, and the allowance then refills over the next hour, so one hour can see nearly twice this many. Each worker counts separately, and the count resets when Synapse restarts. Default: `50`.
-    - `invite_lifetime` - how long an emailed invite or a shared invite link stays valid, in seconds. Default: `604800` (7 days).
-    - `client_room_url` - where invitees are sent once they have signed up or signed in, with `{room_id}` standing for the percent-encoded room ID, such as `https://app.example.org/#/room/{room_id}`. It must be an `http` or `https` URL. Required with `enabled`. See [where invite links lead](#where-invite-links-lead).
+- `guest_invites` - optional configuration for inviting guests to rooms. Each kind of invite is off until enabled, and needs `mas`.
+    - `client_room_url` - where invitees are sent once they have signed up or signed in, with `{room_id}` standing for the percent-encoded room ID, such as `https://app.example.org/#/room/{room_id}`. It must be an `http` or `https` URL. Required when a kind of invite is enabled. See [where invite links lead](#where-invite-links-lead).
+    - `email` - [inviting guests by email](#inviting-guests-by-email).
+        - `enabled` - if true, the module serves `/_synapse/client/invite_guests`. Only enable it on a server with closed registration. Default: `false`.
+        - `max_emails` - the most addresses one request can invite. It can't exceed `per_inviter_per_hour`, or 100, the most MAS emails at once. Default: `20`.
+        - `per_inviter_per_hour` - how many addresses one user can invite per hour, on average. Up to this many can go at once, and the allowance then refills over the next hour, so one hour can see nearly twice this many. Each worker counts separately, and the count resets when Synapse restarts. Default: `50`.
+        - `lifetime` - how long an emailed invite stays valid, in seconds. Default: `604800` (7 days).
+    - `links` - [sharing an invite link](#sharing-an-invite-link).
+        - `enabled` - if true, the module serves `/_synapse/client/invite_guests/link`. Only enable it on a server with closed registration. Default: `false`.
+        - `per_inviter_per_hour` - how many links one user can make per hour, on average, refilling as for `email`. Default: `50`.
+        - `lifetime` - how long a link stays valid, in seconds. Default: `604800` (7 days).
 
 Example configuration:
 
@@ -106,13 +111,18 @@ modules:
               client_secret: your-client-secret
               # Alternatively, load the secret from a file:
               # client_secret_filepath: /run/secrets/mas-client-secret
-          # Invite guests by email (requires `mas`)
-          email_invites:
-              enabled: true
-              max_emails: 20
-              per_inviter_per_hour: 50
-              invite_lifetime: 604800
+          # Invite guests to rooms (requires `mas`)
+          guest_invites:
               client_room_url: "https://app.example.org/#/room/{room_id}"
+              email:
+                  enabled: true
+                  max_emails: 20
+                  per_inviter_per_hour: 50
+                  lifetime: 604800
+              links:
+                  enabled: false
+                  per_inviter_per_hour: 50
+                  lifetime: 604800
 ```
 
 Enable [the Admin API on a MAS
@@ -139,7 +149,7 @@ clients:
 ## Inviting guests by email
 
 `POST /_synapse/client/invite_guests` invites a list of email addresses to ask to
-join a room as guests. It's served when `email_invites.enabled` is set, and needs the
+join a room as guests. It's served when `guest_invites.email.enabled` is set, and needs the
 `mas` configuration above. The module mints an invite code per address with
 `POST /api/admin/v1/user-registration-tokens`, then has MAS email them with
 `POST /api/admin/v1/user-registration-tokens/invite-emails`. MAS registers the guests.
@@ -156,11 +166,11 @@ No MAS release serves the second endpoint yet: it's added by
 The caller must be joined to the room and meet its `invite` power level, the same
 as for inviting a user directly, and can't be a guest themselves. The room's join rule must be
 `knock` or `knock_restricted` (Ask to join), and the room can't be in `rooms_forbidden_to_guests`.
-Addresses are deduplicated ignoring case, and each counts once against `max_emails`
-and `per_inviter_per_hour`.
+Addresses are deduplicated ignoring case, and each counts once against `email.max_emails`
+and `email.per_inviter_per_hour`.
 
 Each address gets a single-use invite code of its own, pinned to that address and
-expiring after `invite_lifetime`, which MAS emails a link for, naming the room and the
+expiring after `email.lifetime`, which MAS emails a link for, naming the room and the
 caller. Every code is minted before any email is sent, so an address MAS refuses sends
 no email at all. The response is a `202` with the number of emails MAS scheduled. The
 links are not in it:
@@ -176,9 +186,9 @@ with `user_id_prefix`, when they sign up, once per address however many invites 
 
 | Status | When                                                                                                                                                                                                                                                                                                            |
 | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 400    | `room_id` or `emails` is missing or malformed, there are more than `max_emails` addresses, or MAS refuses the request, with its message in `msg`                                                                                                                                                                |
+| 400    | `room_id` or `emails` is missing or malformed, there are more than `email.max_emails` addresses, or MAS refuses the request, with its message in `msg`                                                                                                                                                          |
 | 403    | The caller is a guest, isn't joined to the room or is below its `invite` level, or the room is forbidden to guests or its join rule isn't `knock` or `knock_restricted`. For the join rule, the body also has `"reason": "room_not_knockable"`. Synapse's own invite controls can refuse a request too (below). |
-| 429    | The caller is over `per_inviter_per_hour`. The body is Synapse's usual rate-limit error, with `retry_after_ms`. Users exempt from Synapse's rate limits, through an admin API override with `messages_per_second` set to 0 or an application service with `rate_limited: false`, are not limited.               |
+| 429    | The caller is over `email.per_inviter_per_hour`. The body is Synapse's usual rate-limit error, with `retry_after_ms`. Users exempt from Synapse's rate limits, through an admin API override with `messages_per_second` set to 0 or an application service with `rate_limited: false`, are not limited.         |
 | 502    | MAS failed, couldn't be reached, or doesn't serve the endpoints above                                                                                                                                                                                                                                           |
 
 Three of Synapse's own controls on email invites apply here too, and refuse with a 403:
@@ -192,7 +202,7 @@ Three of Synapse's own controls on email invites apply here too, and refuse with
   request is refused. A spam checker's errcode and extra fields are in the body, as
   Synapse returns them.
 
-Synapse's `rc_third_party_invite` rate limit doesn't apply: `per_inviter_per_hour` is
+Synapse's `rc_third_party_invite` rate limit doesn't apply: `email.per_inviter_per_hour` is
 the limit instead. As with Synapse's, it's spent before these checks on each address,
 so a request they refuse still counts against it. Nor do shadow bans, which Synapse doesn't apply under MAS.
 
@@ -221,9 +231,9 @@ Two things limit that today:
 ## Sharing an invite link
 
 `POST /_synapse/client/invite_guests/link` makes a link inviting guests to ask to join a
-room, for the caller to share. It's served alongside `/_synapse/client/invite_guests`
-and refuses callers and rooms the same way, including `block_non_admin_invites`. Each
-request counts once against `per_inviter_per_hour`, separately from email invites.
+room, for the caller to share. It's served when `guest_invites.links.enabled` is set, and
+refuses callers and rooms as `/_synapse/client/invite_guests` does, including
+`block_non_admin_invites`. Each request counts once against `links.per_inviter_per_hour`.
 
 ```json
 {
@@ -234,11 +244,11 @@ request counts once against `per_inviter_per_hour`, separately from email invite
 
 `emails` is optional, and lists the only addresses allowed to use the link, such as a
 meeting's participants. They're checked as for `/_synapse/client/invite_guests`:
-deduplicated ignoring case, at most `max_emails`, and each put to the third-party rules
+deduplicated ignoring case, at most `email.max_emails`, and each put to the third-party rules
 and spam checker callbacks. No email is sent, so the request counts once however many
 addresses it lists. Without `emails`, or with `"emails": null`, anyone may use the link.
 
-MAS mints an invite code with no usage limit, expiring after `invite_lifetime`, and the
+MAS mints an invite code with no usage limit, expiring after `links.lifetime`, and the
 response has its ID and link:
 
 ```json
@@ -253,8 +263,8 @@ Anyone who follows the link signs up as a guest, with a localpart starting with
 list. However many people use it, knocking still decides who gets into the room. The
 module can't end a link before it expires; revoking its invite code with MAS's admin
 API does. The endpoint answers 400 for a missing or malformed
-`room_id` or `emails`, or with MAS's message in `msg` if MAS refuses the request, the 403 and 429
-of `/_synapse/client/invite_guests`, and 502 if MAS fails otherwise, can't be reached, or is too
+`room_id` or `emails`, or with MAS's message in `msg` if MAS refuses the request, the 403 of
+`/_synapse/client/invite_guests`, 429 over `links.per_inviter_per_hour`, and 502 if MAS fails otherwise, can't be reached, or is too
 old to hold a link to `emails`.
 
 Without `emails`, MAS asks them only for a display name if its config allows it:
@@ -281,7 +291,7 @@ Anyone who may make a link to the link's room may replace its list, not only the
 made it. Neither the module nor MAS records which room a link is for, so the caller names
 it, and the module checks that the link leads where a link to that room would, with
 the current `client_room_url`. A link made before `client_room_url` changed can no longer
-be edited. Each request counts once against `per_inviter_per_hour`, with the links the
+be edited. Each request counts once against `links.per_inviter_per_hour`, with the links the
 caller makes, once the caller and the room have passed and before the addresses are
 checked or the module asks MAS about the link. The response is the same as when making a link.
 

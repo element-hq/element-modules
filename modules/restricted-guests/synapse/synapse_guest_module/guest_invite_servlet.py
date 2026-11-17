@@ -7,7 +7,7 @@ import json
 import logging
 import re
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 from urllib.parse import quote
 
 from synapse.api.constants import EventContentFields, EventTypes, JoinRules, Membership
@@ -27,7 +27,11 @@ from synapse.module_api import (
     parse_json_object_from_request,
 )
 
-from synapse_guest_module.config import GuestModuleConfig
+from synapse_guest_module.config import (
+    EmailInvitesConfig,
+    GuestModuleConfig,
+    InviteLinksConfig,
+)
 from synapse_guest_module.mas_admin_client import MasAdminClient
 
 logger = logging.getLogger("synapse.contrib." + __name__)
@@ -71,7 +75,7 @@ class GuestInviteServlet(DirectServeJsonResource):
         )
 
         # Per worker, and reset on restart
-        per_hour = config.email_invites.per_inviter_per_hour
+        per_hour = self._kind_config().per_inviter_per_hour
         self._ratelimiter = Ratelimiter(
             store=api._hs.get_datastores().main,
             clock=api._hs.get_clock(),
@@ -192,7 +196,7 @@ class GuestInviteServlet(DirectServeJsonResource):
         for email in emails:
             unique_emails.setdefault(email.strip().lower(), email.strip())
 
-        max_emails = self._config.email_invites.max_emails
+        max_emails = self._config.guest_invites.email.max_emails
         if len(unique_emails) > max_emails:
             return [], (
                 400,
@@ -274,10 +278,12 @@ class GuestInviteServlet(DirectServeJsonResource):
 
         return state, None
 
+    def _kind_config(self) -> Union[EmailInvitesConfig, InviteLinksConfig]:
+        return self._config.guest_invites.email
+
     def _expires_at(self) -> datetime:
         return datetime.fromtimestamp(
-            self._api._hs.get_clock().time()
-            + self._config.email_invites.invite_lifetime,
+            self._api._hs.get_clock().time() + self._kind_config().lifetime,
             tz=timezone.utc,
         )
 
@@ -298,8 +304,8 @@ class GuestInviteServlet(DirectServeJsonResource):
         differ between rooms.
         """
         # Checked when the config was parsed
-        assert self._config.email_invites.client_room_url is not None
-        return self._config.email_invites.client_room_url.replace(
+        assert self._config.guest_invites.client_room_url is not None
+        return self._config.guest_invites.client_room_url.replace(
             "{room_id}", quote(room_id, safe="")
         )
 
@@ -332,7 +338,7 @@ class GuestInviteLinkServlet(GuestInviteServlet):
     `PUT /_synapse/client/invite_guests/link/{id}` replaces a link's `emails`, and
     requires the link's `room_id` too.
 
-    MAS mints an invite code with no usage limit, expiring after `invite_lifetime`,
+    MAS mints an invite code with no usage limit, expiring after `links.lifetime`,
     which only the `emails` can use if they're given, and anyone otherwise. Nothing
     exists on this homeserver until someone follows the link, and MAS assigns each
     guest's localpart then.
@@ -342,6 +348,9 @@ class GuestInviteLinkServlet(GuestInviteServlet):
     isLeaf = True
 
     _ratelimiter_key = "guest_module_invite_guest_links"
+
+    def _kind_config(self) -> Union[EmailInvitesConfig, InviteLinksConfig]:
+        return self._config.guest_invites.links
 
     async def _async_render_POST(
         self, request: SynapseRequest

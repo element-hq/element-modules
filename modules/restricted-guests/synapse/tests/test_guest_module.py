@@ -17,7 +17,13 @@ from synapse.module_api import NOT_SPAM, ProfileInfo, UserProfile, errors
 from synapse.module_api.errors import ConfigError
 from synapse.types import UserID
 
-from synapse_guest_module.config import EmailInvitesConfig, GuestModuleConfig, MasConfig
+from synapse_guest_module.config import (
+    EmailInvitesConfig,
+    GuestInvitesConfig,
+    GuestModuleConfig,
+    InviteLinksConfig,
+    MasConfig,
+)
 from synapse_guest_module.guest_module import GuestModule
 from tests import SQLiteStore, create_module, mas_config_override
 
@@ -175,55 +181,70 @@ class GuestModuleConfigTest(aiounittest.AsyncTestCase):
                 }
             )
 
-    async def test_parse_config_email_invites(self) -> None:
+    async def test_parse_config_guest_invites_email(self) -> None:
         config = GuestModule.parse_config(
             {
                 **mas_config_override(),
-                "email_invites": {
-                    "enabled": True,
-                    "max_emails": 5,
-                    "per_inviter_per_hour": 10,
-                    "invite_lifetime": 3600,
+                "guest_invites": {
                     "client_room_url": "https://app.example.org/#/room/{room_id}",
+                    "email": {
+                        "enabled": True,
+                        "max_emails": 5,
+                        "per_inviter_per_hour": 10,
+                        "lifetime": 3600,
+                    },
+                    "links": {
+                        "enabled": True,
+                        "per_inviter_per_hour": 3,
+                        "lifetime": 60,
+                    },
                 },
             }
         )
 
         self.assertEqual(
-            config.email_invites,
-            EmailInvitesConfig(
-                enabled=True,
-                max_emails=5,
-                per_inviter_per_hour=10,
-                invite_lifetime=3600,
+            config.guest_invites,
+            GuestInvitesConfig(
                 client_room_url="https://app.example.org/#/room/{room_id}",
+                email=EmailInvitesConfig(
+                    enabled=True,
+                    max_emails=5,
+                    per_inviter_per_hour=10,
+                    lifetime=3600,
+                ),
+                links=InviteLinksConfig(
+                    enabled=True,
+                    per_inviter_per_hour=3,
+                    lifetime=60,
+                ),
             ),
         )
 
-    async def test_parse_config_email_invites_defaults(self) -> None:
+    async def test_parse_config_guest_invites_email_defaults(self) -> None:
         config = GuestModule.parse_config(
             {
                 **mas_config_override(),
-                "email_invites": {
-                    "enabled": True,
+                "guest_invites": {
                     "client_room_url": "https://app.example.org/#/room/{room_id}",
+                    "email": {"enabled": True},
                 },
             }
         )
 
-        self.assertEqual(config.email_invites.invite_lifetime, 604800)
+        self.assertEqual(config.guest_invites.email.lifetime, 604800)
+        self.assertEqual(config.guest_invites.links, InviteLinksConfig())
 
-    async def test_parse_config_fail_email_invites_without_mas(self) -> None:
+    async def test_parse_config_fail_guest_invites_email_without_mas(self) -> None:
         with self.assertRaisesRegex(
-            ConfigError, "Config option 'email_invites' requires 'mas'"
+            ConfigError, "Config option 'guest_invites.email' requires 'mas'"
         ):
             GuestModule.parse_config(
                 {
-                    "email_invites": {"enabled": True},
+                    "guest_invites": {"email": {"enabled": True}},
                 }
             )
 
-    async def test_parse_config_fail_email_invites_client_room_url(self) -> None:
+    async def test_parse_config_fail_guest_invites_email_client_room_url(self) -> None:
         for client_room_url in (
             None,
             1,
@@ -239,99 +260,139 @@ class GuestModuleConfigTest(aiounittest.AsyncTestCase):
         ):
             with self.subTest(client_room_url), self.assertRaisesRegex(
                 ConfigError,
-                "Config option 'email_invites.client_room_url' is required with "
-                "'enabled', and must be an http or https URL in visible ASCII with "
-                "'{room_id}' after its host: ",
+                "Config option 'guest_invites.client_room_url' is required when a "
+                "kind of guest invite is enabled, and must be an http or https URL in "
+                "visible ASCII with '{room_id}' after its host: ",
             ):
                 GuestModule.parse_config(
                     {
                         **mas_config_override(),
-                        "email_invites": {
-                            "enabled": True,
+                        "guest_invites": {
                             "client_room_url": client_room_url,
+                            "email": {"enabled": True},
                         },
                     }
                 )
 
-    async def test_parse_config_fail_email_invites_enabled(self) -> None:
+    async def test_parse_config_fail_guest_invites_links(self) -> None:
+        for links, message in [
+            ("yes", "Config option 'guest_invites.links' must be an object"),
+            (
+                {"enabled": 1},
+                "Config option 'guest_invites.links.enabled' must be a bool",
+            ),
+            ({"enabled": True}, "Config option 'guest_invites.links' requires 'mas'"),
+            (
+                {"per_inviter_per_hour": 0},
+                "Config option 'guest_invites.links.per_inviter_per_hour' must be a "
+                "positive integer",
+            ),
+            (
+                {"lifetime": "60"},
+                "Config option 'guest_invites.links.lifetime' must be a positive "
+                "integer",
+            ),
+        ]:
+            with self.subTest(links), self.assertRaisesRegex(ConfigError, message):
+                GuestModule.parse_config({"guest_invites": {"links": links}})
+
+    async def test_parse_config_fail_guest_invites_links_client_room_url(
+        self,
+    ) -> None:
         with self.assertRaisesRegex(
-            ConfigError, "Config option 'email_invites.enabled' must be a bool"
+            ConfigError, "Config option 'guest_invites.client_room_url' is required"
         ):
             GuestModule.parse_config(
                 {
                     **mas_config_override(),
-                    "email_invites": {"enabled": "true"},
+                    "guest_invites": {"links": {"enabled": True}},
                 }
             )
 
-    async def test_parse_config_fail_email_invites_max_emails_zero(self) -> None:
+    async def test_parse_config_fail_guest_invites_email_enabled(self) -> None:
         with self.assertRaisesRegex(
-            ConfigError,
-            "Config option 'email_invites.max_emails' must be a positive integer",
+            ConfigError, "Config option 'guest_invites.email.enabled' must be a bool"
         ):
             GuestModule.parse_config(
                 {
-                    "email_invites": {"max_emails": 0},
+                    **mas_config_override(),
+                    "guest_invites": {"email": {"enabled": "true"}},
                 }
             )
 
-    async def test_parse_config_fail_email_invites_max_emails_bool(self) -> None:
+    async def test_parse_config_fail_guest_invites_email_max_emails_zero(self) -> None:
         with self.assertRaisesRegex(
             ConfigError,
-            "Config option 'email_invites.max_emails' must be a positive integer",
+            "Config option 'guest_invites.email.max_emails' must be a positive integer",
         ):
             GuestModule.parse_config(
                 {
-                    "email_invites": {"max_emails": True},
+                    "guest_invites": {"email": {"max_emails": 0}},
                 }
             )
 
-    async def test_parse_config_fail_email_invites_per_inviter_per_hour(self) -> None:
+    async def test_parse_config_fail_guest_invites_email_max_emails_bool(self) -> None:
         with self.assertRaisesRegex(
             ConfigError,
-            "Config option 'email_invites.per_inviter_per_hour' must be a positive "
+            "Config option 'guest_invites.email.max_emails' must be a positive integer",
+        ):
+            GuestModule.parse_config(
+                {
+                    "guest_invites": {"email": {"max_emails": True}},
+                }
+            )
+
+    async def test_parse_config_fail_guest_invites_email_per_inviter_per_hour(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(
+            ConfigError,
+            "Config option 'guest_invites.email.per_inviter_per_hour' must be a positive "
             "integer",
         ):
             GuestModule.parse_config(
                 {
-                    "email_invites": {"per_inviter_per_hour": "50"},
+                    "guest_invites": {"email": {"per_inviter_per_hour": "50"}},
                 }
             )
 
-    async def test_parse_config_fail_email_invites_invite_lifetime(self) -> None:
+    async def test_parse_config_fail_guest_invites_email_lifetime(self) -> None:
         with self.assertRaisesRegex(
             ConfigError,
-            "Config option 'email_invites.invite_lifetime' must be a positive integer",
+            "Config option 'guest_invites.email.lifetime' must be a positive integer",
         ):
             GuestModule.parse_config(
                 {
-                    "email_invites": {"invite_lifetime": 0},
+                    "guest_invites": {"email": {"lifetime": 0}},
                 }
             )
 
-    async def test_parse_config_fail_email_invites_max_emails_above_limit(
+    async def test_parse_config_fail_guest_invites_email_max_emails_above_limit(
         self,
     ) -> None:
         with self.assertRaisesRegex(
             ConfigError,
-            "Config option 'email_invites.max_emails' can't exceed "
-            "'email_invites.per_inviter_per_hour'",
+            "Config option 'guest_invites.email.max_emails' can't exceed "
+            "'guest_invites.email.per_inviter_per_hour'",
         ):
             GuestModule.parse_config(
                 {
-                    "email_invites": {"max_emails": 51},
+                    "guest_invites": {"email": {"max_emails": 51}},
                 }
             )
 
-    async def test_parse_config_fail_email_invites_max_emails_above_mas_limit(
+    async def test_parse_config_fail_guest_invites_email_max_emails_above_mas_limit(
         self,
     ) -> None:
         with self.assertRaisesRegex(
-            ConfigError, "Config option 'email_invites.max_emails' can't exceed 100"
+            ConfigError,
+            "Config option 'guest_invites.email.max_emails' can't exceed 100",
         ):
             GuestModule.parse_config(
                 {
-                    "email_invites": {"max_emails": 101, "per_inviter_per_hour": 200},
+                    "guest_invites": {
+                        "email": {"max_emails": 101, "per_inviter_per_hour": 200}
+                    },
                 }
             )
 
