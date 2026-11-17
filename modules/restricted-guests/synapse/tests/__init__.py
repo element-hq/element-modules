@@ -135,12 +135,14 @@ class StubRoomListHandler:
 def stub_homeserver(
     handler: Any = None,
     allow_public_rooms_without_auth: bool = False,
+    block_non_admin_invites: bool = False,
 ) -> Mock:
     """A stub for `ModuleApi._hs`, which `Mock(spec=ModuleApi)` does not provide because
     it is an instance attribute.
     """
     hs = Mock()
     hs.config.server.allow_public_rooms_without_auth = allow_public_rooms_without_auth
+    hs.config.server.block_non_admin_invites = block_non_admin_invites
     hs.get_room_list_handler.return_value = (
         StubRoomListHandler() if handler is None else handler
     )
@@ -149,6 +151,7 @@ def stub_homeserver(
 
 def create_module(
     config_override: Dict[str, Any] | None = None,
+    block_non_admin_invites: bool = False,
 ) -> Tuple[GuestModule, Mock, SQLiteStore]:
     store = SQLiteStore()
     _setup_db(store.conn)
@@ -159,7 +162,7 @@ def create_module(
     # Create a mock based on the ModuleApi spec, but override some mocked functions
     # because some capabilities are needed for running the tests.
     module_api = Mock(spec=ModuleApi)
-    module_api._hs = stub_homeserver()
+    module_api._hs = stub_homeserver(block_non_admin_invites=block_non_admin_invites)
     module_api.http_client = client
     module_api.server_name = SERVER_NAME
     module_api.public_baseurl = "https://matrix.local:1234/"
