@@ -234,6 +234,15 @@ Anyone who follows the link signs up as a guest, with a localpart starting with
 `user_id_prefix`. The endpoint answers 400 for a missing or malformed `room_id`, the 403 and 429
 of `/_synapse/client/invite_guests`, and 502 if MAS fails or can't be reached.
 
+MAS asks them only for a display name if its config allows it:
+
+```yaml
+account:
+    passwordless_registration_without_email_allowed: true
+```
+
+Otherwise MAS asks for an email address and sends a code to it.
+
 ## Production installation
 
 The module is not published to a python registry, but we provide a docker container that can be used as an `initContainer` in Kubernetes:
