@@ -100,16 +100,15 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
     def create_module(
         self,
         config_override: Optional[Dict[str, Any]] = None,
-        email_invites: Optional[Dict[str, Any]] = None,
+        email: Optional[Dict[str, Any]] = None,
         block_non_admin_invites: bool = False,
     ) -> Tuple[GuestModule, Mock, SQLiteStore]:
         module, module_api, store = create_module(
             {
                 **mas_config_override(),
-                "email_invites": {
-                    "enabled": True,
+                "guest_invites": {
                     "client_room_url": "https://app.example.org/#/room/{room_id}",
-                    **(email_invites or {}),
+                    "email": {"enabled": True, **(email or {})},
                 },
                 **(config_override or {}),
             },
@@ -321,9 +320,7 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
         )
 
     async def test_invite_lifetime(self) -> None:
-        module, module_api, _ = self.create_module(
-            email_invites={"invite_lifetime": 3600}
-        )
+        module, module_api, _ = self.create_module(email={"lifetime": 3600})
         module_api._hs.get_clock.return_value.time.return_value = 60.0
 
         status, response = await self.render(module)
@@ -344,7 +341,7 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
 
     async def test_duplicate_emails(self) -> None:
         module, module_api, _ = self.create_module(
-            email_invites={"max_emails": 1, "per_inviter_per_hour": 1}
+            email={"max_emails": 1, "per_inviter_per_hour": 1}
         )
 
         status, response = await self.render(
@@ -360,7 +357,7 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
         )
 
     async def test_too_many_emails(self) -> None:
-        module, module_api, _ = self.create_module(email_invites={"max_emails": 2})
+        module, module_api, _ = self.create_module(email={"max_emails": 2})
 
         status, response = await self.render(
             module,
@@ -373,7 +370,7 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
 
     async def test_limit_counts_emails(self) -> None:
         module, module_api, _ = self.create_module(
-            email_invites={"max_emails": 3, "per_inviter_per_hour": 3}
+            email={"max_emails": 3, "per_inviter_per_hour": 3}
         )
         two_emails = (
             b'{"room_id":"!room:matrix.local",'
@@ -397,7 +394,7 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
 
     async def test_refused_request_does_not_spend_limit(self) -> None:
         module, module_api, _ = self.create_module(
-            email_invites={"max_emails": 2, "per_inviter_per_hour": 2}
+            email={"max_emails": 2, "per_inviter_per_hour": 2}
         )
         two_emails = (
             b'{"room_id":"!room:matrix.local",'
@@ -421,7 +418,7 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
 
     async def test_address_refusal_spends_limit(self) -> None:
         module, module_api, _ = self.create_module(
-            email_invites={"max_emails": 2, "per_inviter_per_hour": 2}
+            email={"max_emails": 2, "per_inviter_per_hour": 2}
         )
         two_emails = (
             b'{"room_id":"!room:matrix.local",'
