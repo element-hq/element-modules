@@ -354,6 +354,7 @@ class GuestInviteServletTest(aiounittest.AsyncTestCase):
                 "username": "visitor-{{ random }}",
                 "passwordless": True,
                 "continue_url": "https://app.example.org/#/room/%21room%3Amatrix.local",
+                "expires_at": "1970-01-08T00:00:00+00:00",
             },
         )
 

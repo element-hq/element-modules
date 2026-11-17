@@ -229,14 +229,17 @@ request counts once against `per_inviter_per_hour`, separately from email invite
 { "room_id": "!room:example.org" }
 ```
 
-MAS mints an invite code with no address and no usage limit, and the response has its link:
+MAS mints an invite code with no address and no usage limit, expiring after
+`invite_lifetime`, and the response has its link:
 
 ```json
 { "invite_url": "https://auth.example.org/register?token=…" }
 ```
 
 Anyone who follows the link signs up as a guest, with a localpart starting with
-`user_id_prefix`. The endpoint answers 400 for a missing or malformed `room_id`, the 403 and 429
+`user_id_prefix`. However many people use it, knocking still decides who gets into the
+room. The module can't end a link before it expires; revoking its invite code with
+MAS's admin API does. The endpoint answers 400 for a missing or malformed `room_id`, the 403 and 429
 of `/_synapse/client/invite_guests`, and 502 if MAS fails or can't be reached.
 
 MAS asks them only for a display name if its config allows it:

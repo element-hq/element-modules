@@ -137,12 +137,6 @@ class GuestInviteServlet(DirectServeJsonResource):
                 errcode, fields = spam_check
                 return 403, {**refused, "errcode": errcode, **fields}
 
-        expires_at = datetime.fromtimestamp(
-            self._api._hs.get_clock().time()
-            + self._config.email_invites.invite_lifetime,
-            tz=timezone.utc,
-        )
-
         logger.info(
             "'%s' is inviting %d guest(s) to '%s'", user_id, len(unique_emails), room_id
         )
@@ -167,7 +161,7 @@ class GuestInviteServlet(DirectServeJsonResource):
                         token=token,
                         email=email,
                         usage_limit=1,
-                        expires_at=expires_at,
+                        expires_at=self._expires_at(),
                     )
                     for email in unique_emails.values()
                 ]
@@ -198,6 +192,13 @@ class GuestInviteServlet(DirectServeJsonResource):
             return 502, {"msg": "Failed to send the invites"}
 
         return 202, {"scheduled": scheduled}
+
+    def _expires_at(self) -> datetime:
+        return datetime.fromtimestamp(
+            self._api._hs.get_clock().time()
+            + self._config.email_invites.invite_lifetime,
+            tz=timezone.utc,
+        )
 
     def _username_template(self) -> str:
         """A minijinja template, which MAS renders when the guest registers."""
@@ -293,9 +294,9 @@ class GuestInviteLinkServlet(GuestInviteServlet):
     inviting guests to a room, for the caller to share. It requires the
     `room_id` property.
 
-    MAS mints an invite code with no address and no usage limit. Nothing exists
-    on this homeserver until someone follows the link, and MAS assigns each
-    guest's localpart then.
+    MAS mints an invite code with no address and no usage limit, expiring after
+    `invite_lifetime`. Nothing exists on this homeserver until someone follows the
+    link, and MAS assigns each guest's localpart then.
     """
 
     async def _async_render_POST(
@@ -323,6 +324,7 @@ class GuestInviteLinkServlet(GuestInviteServlet):
                 username=self._username_template(),
                 continue_url=self._room_url(room_id),
                 token=token,
+                expires_at=self._expires_at(),
             )
         # A timeout is a `SynapseError`, and a connection failure a Twisted error
         except Exception:
