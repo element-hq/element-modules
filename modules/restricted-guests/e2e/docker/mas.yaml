@@ -1,0 +1,2 @@
+database:
+    uri: postgresql://postgres:postgres@localhost/gf_mas

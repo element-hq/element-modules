@@ -1,0 +1,95 @@
+# The stack.sh stack in containers, for compose.sh. Every service shares the
+# `net` service's network namespace, so the services and the tests reach each
+# other on localhost with the same configs as stack.sh.
+name: guest-flows-e2e
+
+x-runner: &runner
+    build:
+        context: .
+        dockerfile: docker/Dockerfile
+        additional_contexts:
+            element-web: ${GF_ELEMENT_WEB_SRC:-./src/element-web}
+    image: guest-flows-e2e-runner
+    network_mode: service:net
+    user: "${GF_UID:-1000}:${GF_GID:-1000}"
+    volumes:
+        - .:/e2e
+
+services:
+    net:
+        image: alpine:3.20
+        command: [tail, -f, /dev/null]
+
+    postgres:
+        image: postgres:16-alpine
+        network_mode: service:net
+        environment:
+            POSTGRES_PASSWORD: postgres
+        volumes:
+            - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+        healthcheck:
+            test: [CMD, pg_isready, -h, localhost, -U, postgres, -d, gf_mas]
+            interval: 1s
+            retries: 120
+
+    sink:
+        <<: *runner
+        command: [python3, -m, aiosmtpd, -n, -l, "127.0.0.1:1025", -c, aiosmtpd.handlers.Mailbox, /e2e/state/maildir]
+
+    synapse:
+        image: matrixdotorg/synapse:v${GF_SYNAPSE_VERSION:-1.165.0}
+        network_mode: service:net
+        depends_on:
+            postgres:
+                condition: service_healthy
+        environment:
+            PYTHONPATH: /module
+        volumes:
+            - .:/e2e:ro
+            - ${GF_MODULE_SRC:-../synapse}:/module:ro
+        entrypoint: [/bin/sh, -c]
+        command:
+            - >-
+                mkdir -p /data &&
+                python -m synapse.app.homeserver -c /e2e/config/homeserver.yaml -c /e2e/docker/homeserver.yaml --generate-keys &&
+                exec python -m synapse.app.homeserver -c /e2e/config/homeserver.yaml -c /e2e/docker/homeserver.yaml
+        healthcheck:
+            test: [CMD, curl, -fsS, http://localhost:8008/health]
+            interval: 1s
+            retries: 120
+
+    # The debug target has a shell, for generating the config on first start
+    mas:
+        build:
+            context: ${GF_MAS_SRC:-./src/mas}
+            target: debug
+        image: guest-flows-e2e-mas
+        network_mode: service:net
+        user: root
+        depends_on:
+            synapse:
+                condition: service_healthy
+        volumes:
+            - .:/e2e:ro
+        entrypoint: [/busybox/sh, -c]
+        command:
+            - >-
+                { [ -f /data/generated.yaml ] || { mkdir -p /data && mas-cli config generate -o /data/generated.yaml; }; } &&
+                exec mas-cli server -c /data/generated.yaml -c /e2e/config/mas-config.yaml -c /e2e/docker/mas.yaml
+        healthcheck:
+            test: [CMD, /busybox/wget, -q, -O, /dev/null, http://localhost:8080/.well-known/openid-configuration]
+            interval: 1s
+            retries: 300
+
+    element:
+        <<: *runner
+        command: [python3, /e2e/element_serve.py, /webapp, /e2e/config/element-config.json, "8090"]
+        healthcheck:
+            test:
+                [CMD, python3, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/config.json')"]
+            interval: 1s
+            retries: 60
+
+    tests:
+        <<: *runner
+        profiles: [tests]

@@ -1,0 +1,22 @@
+database:
+    name: psycopg2
+    args:
+        host: localhost
+        user: postgres
+        password: postgres
+        database: gf_synapse
+        cp_min: 1
+        cp_max: 5
+
+media_store_path: /data/media_store
+signing_key_path: /data/localhost.signing.key
+
+# The base config's listener without ::1, which a container may not have
+listeners:
+    - port: 8008
+      bind_addresses: ["127.0.0.1"]
+      type: http
+      x_forwarded: false
+      resources:
+          - names: [client]
+            compress: false

@@ -1,0 +1,23 @@
+{
+    "default_server_config": {
+        "m.homeserver": {
+            "base_url": "http://localhost:8008",
+            "server_name": "localhost:8008"
+        }
+    },
+    "disable_custom_urls": false,
+    "disable_guests": false,
+    "brand": "Element",
+    "embedded_pages": {
+        "login_for_welcome": true
+    },
+    "features": {
+        "feature_ask_to_join": true
+    },
+    "modules": ["/modules/restricted-guests/index.js"],
+    "io.element.element-web-modules.restricted-guests": {
+        "guest_user_homeserver_url": "http://localhost:8008",
+        "guest_user_prefix": "@guest-",
+        "allow_copy_invite_link": true
+    }
+}

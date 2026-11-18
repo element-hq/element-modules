@@ -1,0 +1,51 @@
+# MAS for the guest flows check: an overlay on `mas-cli config generate`'s
+# output. The database comes from a third config file: stack.sh writes one, and
+# docker/mas.yaml is the one for compose.yaml.
+
+http:
+    public_base: http://localhost:8080/
+    issuer: http://localhost:8080/
+    listeners:
+        - name: gf-admin
+          resources:
+              - name: adminapi
+          binds:
+              - host: localhost
+                port: 8082
+
+matrix:
+    homeserver: localhost:8008
+    secret: 4bacbdda939d86e78d0f29eccbf2411d05ae1b9016326598
+    endpoint: http://localhost:8008/
+
+email:
+    from: '"MAS gf" <mas@localhost>'
+    reply_to: '"MAS gf" <mas@localhost>'
+    transport: smtp
+    mode: plain
+    hostname: localhost
+    port: 1025
+
+# The guest module's client. The scripts use it for their admin calls too.
+clients:
+    - client_id: 01M42400CB0MQ37T1MHZ6W5MGP
+      client_auth_method: client_secret_basic
+      client_secret: 81eaf2b254bcf74e0cdb968599373fd471173d152b6dddb9
+
+policy:
+    data:
+        admin_clients:
+            - 01M42400CB0MQ37T1MHZ6W5MGP
+        # Element Web at http://localhost:8090 registers itself as a client
+        client_registration:
+            allow_insecure_uris: true
+        # Without client_ids, since Element Web registers itself dynamically. Short,
+        # so the browser run can show an older account seeing the consent screen.
+        skip_consent:
+            max_account_age_seconds: 120
+        # For the API checks: a mint pinning an address here is refused
+        banned_domains:
+            - banned.example
+
+account:
+    passwordless_registration_without_email_allowed: true

@@ -1,0 +1,40 @@
+# Synapse for the guest flows check, with the restricted-guests module. The
+# database and file paths come from a second config file: stack.sh writes one,
+# and docker/homeserver.yaml is the one for compose.yaml.
+server_name: "localhost:8008"
+public_baseurl: "http://localhost:8008/"
+report_stats: false
+trusted_key_servers: []
+
+listeners:
+    - port: 8008
+      bind_addresses: ["127.0.0.1", "::1"]
+      type: http
+      x_forwarded: false
+      resources:
+          - names: [client]
+            compress: false
+
+matrix_authentication_service:
+    enabled: true
+    endpoint: http://localhost:8080/
+    secret: 4bacbdda939d86e78d0f29eccbf2411d05ae1b9016326598
+
+modules:
+    - module: synapse_guest_module.GuestModule
+      config:
+          user_id_prefix: guest-
+          display_name_suffix: ""
+          enable_guest_registration: false
+          guest_invites:
+              client_room_url: "http://localhost:8090/#/room/{room_id}"
+              email:
+                  enabled: true
+              links:
+                  enabled: true
+                  allow_open: true
+          mas:
+              admin_api_base_url: http://localhost:8082
+              oauth_base_url: http://localhost:8080
+              client_id: 01M42400CB0MQ37T1MHZ6W5MGP
+              client_secret: 81eaf2b254bcf74e0cdb968599373fd471173d152b6dddb9

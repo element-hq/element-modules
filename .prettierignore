@@ -1,1 +1,5 @@
 *.api.md
+/modules/restricted-guests/e2e/screens/
+/modules/restricted-guests/e2e/src/
+/modules/restricted-guests/e2e/state/
+/modules/restricted-guests/e2e/work/
