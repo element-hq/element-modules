@@ -71,4 +71,5 @@ class GuestModuleConfig:
     # directory from guests is meant to prevent.
     # Both invites of guests into these rooms and joins by guests are denied.
     rooms_forbidden_to_guests: FrozenSet[str] = frozenset()
+    enable_guest_registration: bool = True
     guest_invites: GuestInvitesConfig = GuestInvitesConfig()

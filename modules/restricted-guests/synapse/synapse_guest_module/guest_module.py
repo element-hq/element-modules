@@ -67,9 +67,10 @@ class GuestModule:
         self.registration_servlet = GuestRegistrationServlet(
             config, api, mas_admin_client, self._mas_tables_ready
         )
-        self._api.register_web_resource(
-            "/_synapse/client/register_guest", self.registration_servlet
-        )
+        if config.enable_guest_registration:
+            self._api.register_web_resource(
+                "/_synapse/client/register_guest", self.registration_servlet
+            )
 
         self.invite_servlet: Optional[GuestInviteServlet] = None
         self.invite_link_servlet: Optional[GuestInviteLinkServlet] = None
@@ -131,6 +132,12 @@ class GuestModule:
         display_name_suffix = config.get("display_name_suffix", " (Guest)")
         if not isinstance(display_name_suffix, str):
             raise ConfigError("Config option 'display_name_suffix' must be a string")
+
+        enable_guest_registration = config.get("enable_guest_registration", True)
+        if not isinstance(enable_guest_registration, bool):
+            raise ConfigError(
+                "Config option 'enable_guest_registration' must be a bool"
+            )
 
         enable_user_reaper = config.get("enable_user_reaper", True)
         if not isinstance(enable_user_reaper, bool):
@@ -312,6 +319,7 @@ class GuestModule:
             mas,
             hide_room_directory_from_guests,
             frozenset(rooms_forbidden_to_guests),
+            enable_guest_registration=enable_guest_registration,
             guest_invites=GuestInvitesConfig(
                 client_room_url,
                 EmailInvitesConfig(email_enabled, **email),
